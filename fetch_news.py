@@ -676,16 +676,71 @@ def _fetch_youtube_feed(source, channel_id, max_items, max_age_hours, health_tra
         return []
 
 
-def fetch_feed(source, max_items=10, max_age_hours=48, health_tracker=None):
-    """抓取单个 RSS 源（YouTube 频道直接走页面抓取）"""
+def _fetch_wechat_feed(source, feed_id, wechat_config, max_items, max_age_hours, health_tracker):
+    """微信公众号：通过 we-mp-rss 实例获取 RSS"""
+    name = source['name']
+    base_url = wechat_config.get('base_url', 'http://localhost:8001').rstrip('/')
+    rss_url = f"{base_url}/feed/{feed_id}.xml"
+
+    headers = {
+        'User-Agent': 'AI-Morning-Briefing/2.0',
+        'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+    }
+    auth = wechat_config.get('auth', '')
+    if auth:
+        headers['Authorization'] = f"AK-SK {auth}"
+
+    try:
+        req = urllib.request.Request(rss_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            xml_text = resp.read().decode('utf-8', errors='replace')
+
+        items = parse_rss(xml_text)
+
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(hours=max_age_hours)
+        filtered = [i for i in items if not i['published'] or i['published'] >= cutoff]
+        if not filtered and items:
+            filtered = items[:min(5, max_items)]
+
+        for item in filtered[:max_items]:
+            item['source_name'] = source['name']
+            item['source_icon'] = source['icon']
+            item['source_color'] = source['color']
+            item['source_category'] = source['category']
+
+        count = len(filtered[:max_items])
+        print(f"  ✅ {name}: 获取 {count} 条")
+        if health_tracker:
+            health_tracker.record_success(name, count)
+        return filtered[:max_items]
+
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError) as e:
+        print(f"  ❌ {name}: {e}")
+        if health_tracker:
+            health_tracker.record_failure(name, e)
+        return []
+
+
+def fetch_feed(source, max_items=10, max_age_hours=48, health_tracker=None, config=None):
+    """抓取单个 RSS 源"""
     name = source['name']
     url = source['url']
     print(f"  📡 抓取 {name}...")
 
-    # YouTube 源：直接走频道页抓取，跳过必定 404 的 RSS
+    # YouTube 源：直接走频道页抓取
     if url.startswith('youtube://'):
         channel_id = url.replace('youtube://', '')
         return _fetch_youtube_feed(source, channel_id, max_items, max_age_hours, health_tracker)
+
+    # 微信公众号：通过 we-mp-rss 实例
+    if url.startswith('wechat://'):
+        feed_id = url.replace('wechat://', '')
+        if feed_id == 'FEED_ID_HERE':
+            print(f"  ⏭️ {name}: 占位符未替换，跳过")
+            return []
+        wechat_config = (config or {}).get('wechat_rss', {})
+        return _fetch_wechat_feed(source, feed_id, wechat_config, max_items, max_age_hours, health_tracker)
 
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
@@ -1417,7 +1472,7 @@ def main():
     # ① 并发抓取 RSS
     all_items = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-        futures = {executor.submit(fetch_feed, src, max_items, max_age, health_tracker): src
+        futures = {executor.submit(fetch_feed, src, max_items, max_age, health_tracker, config): src
                    for src in all_sources}
         for future in concurrent.futures.as_completed(futures):
             all_items.extend(future.result())

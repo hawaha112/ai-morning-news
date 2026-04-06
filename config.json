@@ -167,7 +167,7 @@
       {
         "name": "36氪",
         "category": "industry",
-        "url": "https://36kr.com/feed",
+        "url": "https://rsshub.rssforever.com/36kr/newsflashes",
         "icon": "💼",
         "color": "#0066FF",
         "description": "科技产业与创投",
@@ -176,13 +176,66 @@
       {
         "name": "少数派",
         "category": "tech",
-        "url": "https://sspai.com/feed",
+        "url": "https://rsshub.rssforever.com/sspai/index",
         "icon": "📱",
         "color": "#DA282A",
         "description": "AI工具与效率提升",
         "ai_only": false
+      },
+      {
+        "name": "虎嗅科技",
+        "category": "media",
+        "url": "https://rsshub.rssforever.com/huxiu/article",
+        "icon": "🐯",
+        "color": "#FF6600",
+        "description": "虎嗅网科技商业深度报道",
+        "ai_only": false
+      },
+      {
+        "name": "掘金 AI",
+        "category": "community",
+        "url": "https://rsshub.rssforever.com/juejin/trending/ai/weekly",
+        "icon": "💎",
+        "color": "#1E80FF",
+        "description": "掘金 AI 板块热门文章",
+        "ai_only": true
+      },
+      {
+        "name": "机器之心",
+        "category": "media",
+        "url": "wechat://FEED_ID_HERE",
+        "icon": "🤖",
+        "color": "#09B83E",
+        "description": "AI 领域头部中文媒体",
+        "ai_only": true,
+        "_注释": "需部署 we-mp-rss 后填入实际 feed_id"
+      },
+      {
+        "name": "量子位",
+        "category": "media",
+        "url": "wechat://FEED_ID_HERE",
+        "icon": "⚛️",
+        "color": "#6C5CE7",
+        "description": "AI 科技深度报道",
+        "ai_only": true,
+        "_注释": "需部署 we-mp-rss 后填入实际 feed_id"
+      },
+      {
+        "name": "新智元",
+        "category": "media",
+        "url": "wechat://FEED_ID_HERE",
+        "icon": "🧬",
+        "color": "#0984E3",
+        "description": "AI 行业动态",
+        "ai_only": true,
+        "_注释": "需部署 we-mp-rss 后填入实际 feed_id"
       }
     ]
+  },
+  "wechat_rss": {
+    "base_url": "http://localhost:8001",
+    "auth": "",
+    "_注释": "we-mp-rss 实例地址。auth 留空或填 AK-SK 格式: WK_xxx:SK_xxx"
   },
   "source_authority": {
     "_注释": "来源权威度权重 1-5，用于排序计算",
@@ -203,7 +256,12 @@
     "Matthew Berman": 2,
     "Yannic Kilcher": 3,
     "36氪": 2,
-    "少数派": 2
+    "少数派": 2,
+    "虎嗅科技": 2,
+    "掘金 AI": 2,
+    "机器之心": 4,
+    "量子位": 3,
+    "新智元": 3
   },
   "settings": {
     "max_items_per_source": 10,
