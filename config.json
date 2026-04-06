@@ -125,6 +125,42 @@
         "color": "#B31B1B",
         "description": "ArXiv 机器学习论文",
         "ai_only": true
+      },
+      {
+        "name": "AI Explained",
+        "category": "video",
+        "url": "youtube://UCNJ1Ymd5yFuUPtn21xtRbbw",
+        "icon": "🎬",
+        "color": "#FF0000",
+        "description": "深度AI视频解读",
+        "ai_only": true
+      },
+      {
+        "name": "Two Minute Papers",
+        "category": "video",
+        "url": "youtube://UCbfYPyITQ-7l4upoX8nvctg",
+        "icon": "🎬",
+        "color": "#FF0000",
+        "description": "AI论文快速解读",
+        "ai_only": true
+      },
+      {
+        "name": "Matthew Berman",
+        "category": "video",
+        "url": "youtube://UCawZsQWqfGSbCI5yjkdVkTA",
+        "icon": "🎬",
+        "color": "#FF0000",
+        "description": "AI产品评测与新闻",
+        "ai_only": true
+      },
+      {
+        "name": "Yannic Kilcher",
+        "category": "video",
+        "url": "youtube://UCZHmQk67mSJgfCCTn7xBfew",
+        "icon": "🎬",
+        "color": "#FF0000",
+        "description": "AI论文深度解读",
+        "ai_only": true
       }
     ],
     "chinese": [
@@ -162,6 +198,10 @@
     "Ars Technica AI": 3,
     "Hugging Face Blog": 4,
     "Hacker News AI": 2,
+    "AI Explained": 3,
+    "Two Minute Papers": 3,
+    "Matthew Berman": 2,
+    "Yannic Kilcher": 3,
     "36氪": 2,
     "少数派": 2
   },

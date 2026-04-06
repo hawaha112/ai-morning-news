@@ -643,11 +643,49 @@ class SourceHealthTracker:
                   f" | 错误: {a['last_error'][:60]}")
 
 
+def _fetch_youtube_feed(source, channel_id, max_items, max_age_hours, health_tracker):
+    """YouTube 专用抓取：直接从频道页 HTML 提取视频列表"""
+    name = source['name']
+    try:
+        items = _scrape_youtube_channel(channel_id, max_items)
+        if not items:
+            raise RuntimeError("频道页解析无结果")
+
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(hours=max_age_hours)
+        filtered = [i for i in items if not i['published'] or i['published'] >= cutoff]
+        if not filtered and items:
+            filtered = items[:min(5, max_items)]
+
+        for item in filtered[:max_items]:
+            item['source_name'] = source['name']
+            item['source_icon'] = source['icon']
+            item['source_color'] = source['color']
+            item['source_category'] = source['category']
+
+        count = len(filtered[:max_items])
+        print(f"  ✅ {name}: 获取 {count} 条")
+        if health_tracker:
+            health_tracker.record_success(name, count)
+        return filtered[:max_items]
+
+    except Exception as e:
+        print(f"  ❌ {name}: {e}")
+        if health_tracker:
+            health_tracker.record_failure(name, e)
+        return []
+
+
 def fetch_feed(source, max_items=10, max_age_hours=48, health_tracker=None):
-    """抓取单个 RSS 源"""
+    """抓取单个 RSS 源（YouTube 频道直接走页面抓取）"""
     name = source['name']
     url = source['url']
     print(f"  📡 抓取 {name}...")
+
+    # YouTube 源：直接走频道页抓取，跳过必定 404 的 RSS
+    if url.startswith('youtube://'):
+        channel_id = url.replace('youtube://', '')
+        return _fetch_youtube_feed(source, channel_id, max_items, max_age_hours, health_tracker)
 
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
@@ -695,31 +733,6 @@ def fetch_feed(source, max_items=10, max_age_hours=48, health_tracker=None):
 
     except (urllib.error.URLError, urllib.error.HTTPError, OSError,
             ET.ParseError, UnicodeDecodeError) as e:
-        # YouTube RSS 404 fallback：抓频道页
-        if 'youtube.com/feeds/' in url:
-            m = re.search(r'channel_id=([A-Za-z0-9_-]+)', url)
-            if m:
-                channel_id = m.group(1)
-                print(f"  🔄 {name}: RSS 失败, 尝试频道页抓取...")
-                items = _scrape_youtube_channel(channel_id, max_items)
-                if items:
-                    now = datetime.now(timezone.utc)
-                    cutoff = now - timedelta(hours=max_age_hours)
-                    filtered = [i for i in items
-                                if not i['published'] or i['published'] >= cutoff]
-                    if not filtered and items:
-                        filtered = items[:min(5, max_items)]
-                    for item in filtered[:max_items]:
-                        item['source_name'] = source['name']
-                        item['source_icon'] = source['icon']
-                        item['source_color'] = source['color']
-                        item['source_category'] = source['category']
-                    count = len(filtered[:max_items])
-                    print(f"  ✅ {name}: 频道页抓取 {count} 条")
-                    if health_tracker:
-                        health_tracker.record_success(name, count)
-                    return filtered[:max_items]
-
         print(f"  ❌ {name}: {e}")
         if health_tracker:
             health_tracker.record_failure(name, e)
