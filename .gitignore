@@ -11,6 +11,7 @@ output/
 
 # Runtime data
 history.json
+dedup.db
 daily_run.log
 *.log
 

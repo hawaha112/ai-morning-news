@@ -26,6 +26,8 @@ import time
 
 # 本地模块
 from llm_analyzer import LLMAnalyzer, create_analyzer_from_config
+from dedup_engine import DedupEngine
+from source_ranker import SourceRanker
 
 # ═══════════════════════════════════════════════════════════════════════
 # 第一部分：RSS 解析（纯标准库）
@@ -1235,14 +1237,21 @@ def main():
     all_items.sort(key=sort_key)
     print(f"\n📊 共获取 {len(all_items)} 条资讯")
 
-    # ② 去重
-    all_items = deduplicate_items(all_items)
-
-    # ③ 历史追踪
-    history_path = script_dir / settings.get('history_file', 'history.json')
-    history_days = settings.get('history_days', 7)
-    history = load_history(history_path, max_days=history_days)
-    all_items = mark_seen_items(all_items, history)
+    # ② 去重（DedupEngine：哈希 + 语义两层去重，SQLite 持久化）
+    dedup_db_path = str(script_dir / 'dedup.db')
+    dedup_engine = DedupEngine(
+        db_path=dedup_db_path,
+        semantic_threshold=0.60,
+        recent_hours=72
+    )
+    ranker = SourceRanker(config)
+    all_items = dedup_engine.deduplicate(
+        all_items,
+        source_authority=ranker.authority
+    )
+    # 标记所有通过去重的条目为"新"（DedupEngine 已处理历史对比）
+    for item in all_items:
+        item['_is_new'] = True
 
     # 限制总数
     all_items = all_items[:100]
@@ -1278,20 +1287,13 @@ def main():
         for item in all_items:
             item['analysis'] = _default_analysis(item.get('title', ''))
 
-    # ⑦ 按重要性 × 来源权威度排序
-    def importance_sort_key(item):
-        analysis = item.get('analysis', {})
-        importance = analysis.get('importance', 1)
-        authority = source_authority.get(item.get('source_name', ''), 2)
-        score = importance * 0.7 + authority * 0.3
-        if item.get('_is_new', True):
-            score += 0.5
-        return -score
+    # ⑦ 来源信誉评分 + 聚类标注 + 综合排序
+    all_items = ranker.score_and_filter(all_items, min_authority=0)
+    all_items = ranker.enrich_cluster_info(all_items)
+    all_items = ranker.sort_by_relevance(all_items)
 
-    all_items.sort(key=importance_sort_key)
-
-    # ⑧ 保存历史
-    save_history(history_path, history, all_items)
+    # 关闭去重引擎（释放 SQLite 连接）
+    dedup_engine.close()
 
     # ⑨ 生成 HTML
     print("\n🎨 生成页面...")
