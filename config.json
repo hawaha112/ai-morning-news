@@ -120,7 +120,7 @@
       {
         "name": "ArXiv AI",
         "category": "research",
-        "url": "https://arxiv.org/rss/cs.AI",
+        "url": "https://rss.arxiv.org/rss/cs.AI",
         "icon": "📄",
         "color": "#B31B1B",
         "description": "ArXiv 人工智能论文",
@@ -129,7 +129,7 @@
       {
         "name": "ArXiv ML",
         "category": "research",
-        "url": "https://arxiv.org/rss/cs.LG",
+        "url": "https://rss.arxiv.org/rss/cs.LG",
         "icon": "📄",
         "color": "#B31B1B",
         "description": "ArXiv 机器学习论文",

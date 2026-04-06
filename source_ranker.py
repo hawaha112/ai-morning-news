@@ -234,13 +234,17 @@ class SourceRanker:
             # 是否是新条目
             new_bonus = 0.5 if item.get('_is_new', True) else 0
 
+            # 旧事新炒惩罚（LLM 判断无实质性新信息的后续报道）
+            follow_up_penalty = -1.5 if analysis.get('is_follow_up', False) else 0
+
             # 综合评分
             score = (
                 importance * 0.40 +
                 authority * 0.25 +
                 freshness * 0.15 +
                 multi_source_bonus * 0.10 +
-                new_bonus * 0.10
+                new_bonus * 0.10 +
+                follow_up_penalty
             )
 
             return -score

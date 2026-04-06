@@ -131,11 +131,29 @@ class TFIDFMatcher:
         denom = math.sqrt(norm_a) * math.sqrt(norm_b)
         return dot / denom if denom > 0 else 0.0
 
+    def _jaccard(self, idx_a: int, idx_b: int) -> float:
+        """词集合 Jaccard 相似度（对短标题更鲁棒）"""
+        ka = set(self._vectors[idx_a].keys())
+        kb = set(self._vectors[idx_b].keys())
+        if not ka or not kb:
+            return 0.0
+        return len(ka & kb) / len(ka | kb)
+
     def find_similar(self, idx: int, threshold: float = 0.6) -> List[Tuple[int, float]]:
-        """找出与给定文档相似度超过阈值的所有文档"""
+        """找出与给定文档相似度超过阈值的所有文档
+
+        使用 TF-IDF 余弦相似度为主，对短文本（token < 10）补充 Jaccard
+        兜底检查，取两者较高值。解决短标题在 TF-IDF 空间中相似度偏低的问题。
+        """
         results = []
+        is_short = len(self._vectors[idx]) < 10
         for i in range(idx):  # 只跟之前的比
             sim = self.similarity(idx, i)
+            # 短文本 Jaccard 兜底
+            if sim < threshold and is_short:
+                jac = self._jaccard(idx, i)
+                if jac > sim:
+                    sim = jac
             if sim >= threshold:
                 results.append((i, sim))
         return results

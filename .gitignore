@@ -12,14 +12,15 @@ output/
 # Runtime data
 history.json
 dedup.db
+source_health.json
 daily_run.log
 *.log
 
-# Backup files
-config.json.bak
+# Backup / old version files
+*.bak
 fetch_news_old.py
 fetch_news_prev.py
 fetch_news_v1.py
 
-# Secrets (tokens are in env vars or git remote config)
-# config.json contains no secrets, safe to commit
+# Secrets (tokens stored in ~/.config/ai-briefing/.env)
+.env

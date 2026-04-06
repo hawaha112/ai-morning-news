@@ -218,11 +218,16 @@ def parse_rss(xml_text):
 # 第二部分：文章正文抓取
 # ═══════════════════════════════════════════════════════════════════════
 
-def _http_get(url, timeout=10):
-    """通用 HTTP GET"""
+def _make_nossl_opener():
+    """创建跳过 SSL 验证的 opener（仅用于证书有问题的服务器）"""
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
+    return urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx))
+
+
+def _http_get(url, timeout=10):
+    """通用 HTTP GET（优先验证 SSL，证书问题时自动降级）"""
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
                        'AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -231,9 +236,14 @@ def _http_get(url, timeout=10):
         'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8',
     }
     req = urllib.request.Request(url, headers=headers)
-    opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx))
-    with opener.open(req, timeout=timeout) as resp:
-        data = resp.read(800_000)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = resp.read(800_000)
+    except (ssl.SSLCertVerificationError, ssl.SSLError):
+        opener = _make_nossl_opener()
+        req = urllib.request.Request(url, headers=headers)
+        with opener.open(req, timeout=timeout) as resp:
+            data = resp.read(800_000)
     for enc in ['utf-8', 'latin-1', 'gb2312', 'gbk']:
         try:
             return data.decode(enc)
@@ -286,12 +296,8 @@ def _fetch_github_readme(gh_url):
         owner, repo = m.group(1), m.group(2)
         api_url = f"https://api.github.com/repos/{owner}/{repo}/readme"
         headers = {'Accept': 'application/vnd.github.v3.raw', 'User-Agent': 'Mozilla/5.0'}
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
         req = urllib.request.Request(api_url, headers=headers)
-        opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx))
-        with opener.open(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=10) as resp:
             readme = resp.read(100_000).decode('utf-8', errors='replace')
         readme = re.sub(r'!\[[^\]]*\]\([^)]+\)', '', readme)
         readme = re.sub(r'\[[^\]]*\]\([^)]+\)', '', readme)
@@ -440,22 +446,102 @@ def enrich_articles_with_content(items):
             except:
                 pass
     print(f"  📥 成功抓取 {success}/{len(to_fetch)} 篇原文")
+
+    # Fallback：对抓取失败且无 article_text 的条目，用 RSS summary 兜底
+    fallback_count = 0
+    for item in items:
+        if not item.get('article_text') and item.get('summary'):
+            summary = item['summary'].strip()
+            if len(summary) > 30:
+                item['article_text'] = summary
+                fallback_count += 1
+    if fallback_count > 0:
+        print(f"  📋 {fallback_count} 篇使用 RSS 摘要兜底")
+
     return items
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# 第三部分：RSS 源抓取
+# 第三部分：RSS 源抓取 & 源健康度监控
 # ═══════════════════════════════════════════════════════════════════════
 
-def fetch_feed(source, max_items=10, max_age_hours=48):
+class SourceHealthTracker:
+    """跟踪每个源的抓取健康状态，连续失败超过阈值时报警"""
+
+    def __init__(self, health_path: str, alert_threshold: int = 3):
+        self.health_path = Path(health_path)
+        self.alert_threshold = alert_threshold
+        self.data = self._load()
+
+    def _load(self) -> dict:
+        if self.health_path.exists():
+            try:
+                with open(self.health_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return {}
+
+    def save(self):
+        try:
+            with open(self.health_path, 'w', encoding='utf-8') as f:
+                json.dump(self.data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"  ⚠️ 健康度数据保存失败: {e}")
+
+    def record_success(self, source_name: str, item_count: int):
+        self.data[source_name] = {
+            'status': 'ok',
+            'last_success': datetime.now(timezone.utc).isoformat(),
+            'last_count': item_count,
+            'consecutive_failures': 0,
+            'last_error': '',
+        }
+
+    def record_failure(self, source_name: str, error: str):
+        prev = self.data.get(source_name, {})
+        failures = prev.get('consecutive_failures', 0) + 1
+        self.data[source_name] = {
+            'status': 'failing',
+            'last_success': prev.get('last_success', ''),
+            'last_count': prev.get('last_count', 0),
+            'consecutive_failures': failures,
+            'last_error': str(error)[:200],
+        }
+
+    def get_alerts(self) -> list:
+        """返回连续失败超过阈值的源列表"""
+        alerts = []
+        for name, info in self.data.items():
+            fails = info.get('consecutive_failures', 0)
+            if fails >= self.alert_threshold:
+                last_ok = info.get('last_success', '从未成功')
+                err = info.get('last_error', '未知错误')
+                alerts.append({
+                    'source': name,
+                    'consecutive_failures': fails,
+                    'last_success': last_ok,
+                    'last_error': err,
+                })
+        return alerts
+
+    def print_report(self):
+        alerts = self.get_alerts()
+        if not alerts:
+            return
+        print(f"\n🚨 源健康度警报：{len(alerts)} 个源连续失败")
+        for a in alerts:
+            print(f"  ⛔ {a['source']}: 连续 {a['consecutive_failures']} 次失败"
+                  f" | 上次成功: {a['last_success'][:10] if a['last_success'] != '从未成功' else '从未成功'}"
+                  f" | 错误: {a['last_error'][:60]}")
+
+
+def fetch_feed(source, max_items=10, max_age_hours=48, health_tracker=None):
     """抓取单个 RSS 源"""
     name = source['name']
     url = source['url']
     print(f"  📡 抓取 {name}...")
 
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
                        'AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
@@ -466,12 +552,20 @@ def fetch_feed(source, max_items=10, max_age_hours=48):
         def redirect_request(self, req, fp, code, msg, headers, newurl):
             return urllib.request.Request(newurl, headers=dict(req.header_items()))
 
-    opener = urllib.request.build_opener(
-        SmartRedirectHandler, urllib.request.HTTPSHandler(context=ctx))
-
     try:
         req = urllib.request.Request(url, headers=headers)
-        with opener.open(req, timeout=20) as resp:
+        try:
+            opener = urllib.request.build_opener(SmartRedirectHandler)
+            resp_ctx = opener.open(req, timeout=20)
+        except (ssl.SSLCertVerificationError, ssl.SSLError):
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            opener = urllib.request.build_opener(
+                SmartRedirectHandler, urllib.request.HTTPSHandler(context=ctx))
+            req = urllib.request.Request(url, headers=headers)
+            resp_ctx = opener.open(req, timeout=20)
+        with resp_ctx as resp:
             data = resp.read()
             for encoding in ['utf-8', 'latin-1', 'gb2312', 'gbk']:
                 try:
@@ -496,11 +590,16 @@ def fetch_feed(source, max_items=10, max_age_hours=48):
             item['source_color'] = source['color']
             item['source_category'] = source['category']
 
-        print(f"  ✅ {name}: 获取 {len(filtered[:max_items])} 条")
+        count = len(filtered[:max_items])
+        print(f"  ✅ {name}: 获取 {count} 条")
+        if health_tracker:
+            health_tracker.record_success(name, count)
         return filtered[:max_items]
 
     except Exception as e:
         print(f"  ❌ {name}: {e}")
+        if health_tracker:
+            health_tracker.record_failure(name, e)
         return []
 
 
@@ -527,6 +626,54 @@ def _title_similarity(t1, t2):
     if not words1 or not words2:
         return 0.0
     return len(words1 & words2) / len(words1 | words2)
+
+
+# AI 相关关键词（用于对非 ai_only 源做预过滤）
+_AI_KEYWORDS = re.compile(
+    r'(?i)\b(?:'
+    r'ai|artificial.intelligence|machine.learning|deep.learning|'
+    r'neural.net|llm|large.language.model|gpt|chatgpt|openai|'
+    r'anthropic|claude|gemini|copilot|midjourney|stable.diffusion|'
+    r'transformer|diffusion.model|reinforcement.learning|'
+    r'computer.vision|natural.language|nlp|nlu|'
+    r'generative|gen.?ai|agi|alignment|'
+    r'robot|autonomous|self.driving|autopilot|'
+    r'chip|gpu|tpu|nvidia|cuda|'
+    r'hugging.?face|pytorch|tensorflow|'
+    r'token|embedding|fine.?tun|rag|vector.?db|'
+    r'agent|multi.?modal|reasoning|'
+    r'deepseek|mistral|llama|qwen|'
+    # 中文
+    r'人工智能|机器学习|深度学习|大模型|大语言模型|'
+    r'神经网络|自然语言|智能体|算力|芯片|'
+    r'自动驾驶|具身智能|生成式|训练|推理|'
+    r'向量|微调|对齐|多模态'
+    r')\b'
+)
+
+
+def _keyword_prefilter(items, ai_only_sources):
+    """对非 ai_only 源的条目做关键词预筛选
+
+    ai_only 源的条目全部保留（已经是 AI 频道）。
+    非 ai_only 源的条目需要标题或摘要中含 AI 关键词才保留。
+    """
+    result = []
+    filtered = 0
+    for item in items:
+        source = item.get('source_name', '')
+        if source in ai_only_sources:
+            result.append(item)
+            continue
+        # 非 AI 专用源 → 用关键词判断
+        text = (item.get('title', '') + ' ' + item.get('summary', '')[:300]).lower()
+        if _AI_KEYWORDS.search(text):
+            result.append(item)
+        else:
+            filtered += 1
+    if filtered > 0:
+        print(f"  🔍 关键词预过滤移除 {filtered} 条明显非 AI 内容（节省 LLM 调用）")
+    return result
 
 
 def deduplicate_items(items):
@@ -1193,6 +1340,7 @@ def _default_analysis(title):
         'background': '',
         'deep_analysis': '',
         'importance': 1,
+        'is_follow_up': False,
         'categories': ['其他'],
         'source_type': 'news',
         'reading_minutes': 1,
@@ -1221,13 +1369,23 @@ def main():
     all_sources = sources.get('english', []) + sources.get('chinese', [])
     print(f"\n📋 共 {len(all_sources)} 个信息源\n")
 
+    # 初始化源健康度追踪
+    health_tracker = SourceHealthTracker(
+        health_path=str(script_dir / 'source_health.json'),
+        alert_threshold=3
+    )
+
     # ① 并发抓取 RSS
     all_items = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-        futures = {executor.submit(fetch_feed, src, max_items, max_age): src
+        futures = {executor.submit(fetch_feed, src, max_items, max_age, health_tracker): src
                    for src in all_sources}
         for future in concurrent.futures.as_completed(futures):
             all_items.extend(future.result())
+
+    # 源健康度报警
+    health_tracker.print_report()
+    health_tracker.save()
 
     # 按时间排序
     def sort_key(item):
@@ -1255,6 +1413,16 @@ def main():
 
     # 限制总数
     all_items = all_items[:100]
+
+    # ③-B 关键词预过滤：对 ai_only=false 的源，先用规则排除明显非 AI 内容
+    #      （减少 LLM 调用量，实测可省 70%+ API 成本）
+    ai_only_sources = set()
+    for lang in ('english', 'chinese'):
+        for src in config.get('sources', {}).get(lang, []):
+            if src.get('ai_only', False):
+                ai_only_sources.add(src['name'])
+
+    all_items = _keyword_prefilter(all_items, ai_only_sources)
 
     # ④ 抓取文章原文（为 LLM 提供更多上下文）
     all_items = enrich_articles_with_content(all_items)
@@ -1292,7 +1460,8 @@ def main():
     all_items = ranker.enrich_cluster_info(all_items)
     all_items = ranker.sort_by_relevance(all_items)
 
-    # 关闭去重引擎（释放 SQLite 连接）
+    # 清理过期记录 + 关闭去重引擎
+    dedup_engine.db.cleanup(keep_days=30)
     dedup_engine.close()
 
     # ⑨ 生成 HTML
@@ -1322,6 +1491,17 @@ def main():
     print("\n" + "=" * 55)
     print(f"  ☀️  AI 早报生成完毕！共 {len(all_items)} 条 AI 资讯")
     print("=" * 55)
+
+    # 输出结构化统计供 run_daily.sh 读取
+    stats = {
+        "article_count": len(all_items),
+        "output_file": str(output_path),
+        "file_size_kb": round(output_path.stat().st_size / 1024, 1),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    stats_path = script_dir / 'output' / 'stats.json'
+    with open(stats_path, 'w', encoding='utf-8') as f:
+        json.dump(stats, f, ensure_ascii=False, indent=2)
 
 
 if __name__ == '__main__':
