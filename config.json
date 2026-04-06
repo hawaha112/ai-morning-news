@@ -203,32 +203,29 @@
       {
         "name": "机器之心",
         "category": "media",
-        "url": "wechat://FEED_ID_HERE",
+        "url": "https://plink.anyfeeder.com/weixin/almosthuman2014",
         "icon": "🤖",
         "color": "#09B83E",
         "description": "AI 领域头部中文媒体",
-        "ai_only": true,
-        "_注释": "需部署 we-mp-rss 后填入实际 feed_id"
+        "ai_only": true
       },
       {
         "name": "量子位",
         "category": "media",
-        "url": "wechat://FEED_ID_HERE",
+        "url": "https://www.qbitai.com/feed",
         "icon": "⚛️",
         "color": "#6C5CE7",
         "description": "AI 科技深度报道",
-        "ai_only": true,
-        "_注释": "需部署 we-mp-rss 后填入实际 feed_id"
+        "ai_only": true
       },
       {
         "name": "新智元",
         "category": "media",
-        "url": "wechat://FEED_ID_HERE",
+        "url": "https://plink.anyfeeder.com/weixin/AI_era",
         "icon": "🧬",
         "color": "#0984E3",
         "description": "AI 行业动态",
-        "ai_only": true,
-        "_注释": "需部署 we-mp-rss 后填入实际 feed_id"
+        "ai_only": true
       }
     ]
   },
