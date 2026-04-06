@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store
+
+# Output (deployed separately to gh-pages)
+output/
+
+# Runtime data
+history.json
+daily_run.log
+*.log
+
+# Backup files
+config.json.bak
+fetch_news_old.py
+fetch_news_prev.py
+fetch_news_v1.py
+
+# Secrets (tokens are in env vars or git remote config)
+# config.json contains no secrets, safe to commit

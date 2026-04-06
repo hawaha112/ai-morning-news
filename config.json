@@ -1,0 +1,226 @@
+{
+  "llm": {
+    "enabled": true,
+    "base_url": "http://127.0.0.1:10531/v1",
+    "api_key": "",
+    "model": "gpt-5.4-mini",
+    "auth_type": "bearer",
+    "auth_header": "Authorization",
+    "auth_prefix": "Bearer",
+    "max_retries": 3,
+    "timeout": 60,
+    "max_workers": 4,
+    "temperature": 0.3,
+    "max_tokens": 1500,
+    "_注释_方案A_Codex代理": "先运行 npx @openai/codex login 再运行 npx openai-oauth 启动本地代理, base_url 用 http://127.0.0.1:10531/v1, api_key 留空",
+    "_注释_方案B_API_Key": "如有 API Key, 改 base_url 为 https://api.openai.com/v1, 填入 api_key",
+    "_注释_方案C_OpenClaw": "如用 OpenClaw Gateway, 改 base_url 为 http://localhost:18789/v1, api_key 填 Gateway token"
+  },
+  "sources": {
+    "english": [
+      {
+        "name": "Hacker News AI",
+        "category": "community",
+        "url": "https://news.ycombinator.com/rss",
+        "icon": "🔥",
+        "color": "#FF6600",
+        "description": "Hacker News 热门讨论",
+        "ai_only": false
+      },
+      {
+        "name": "Ars Technica AI",
+        "category": "media",
+        "url": "https://feeds.arstechnica.com/arstechnica/features",
+        "icon": "📰",
+        "color": "#E74C3C",
+        "description": "Ars Technica 深度技术报道",
+        "ai_only": false
+      },
+      {
+        "name": "MIT Tech Review",
+        "category": "research",
+        "url": "https://www.technologyreview.com/feed/",
+        "icon": "🎓",
+        "color": "#2ECC71",
+        "description": "MIT技术评论，深度技术分析",
+        "ai_only": false
+      },
+      {
+        "name": "The Verge AI",
+        "category": "media",
+        "url": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
+        "icon": "⚡",
+        "color": "#FA6400",
+        "description": "The Verge AI频道",
+        "ai_only": true
+      },
+      {
+        "name": "OpenAI Blog",
+        "category": "official",
+        "url": "https://openai.com/blog/rss.xml",
+        "icon": "🤖",
+        "color": "#10A37F",
+        "description": "OpenAI官方博客",
+        "ai_only": true
+      },
+      {
+        "name": "Anthropic News",
+        "category": "official",
+        "url": "https://raw.githubusercontent.com/taobojlen/anthropic-rss-feed/main/anthropic_news_rss.xml",
+        "icon": "🧠",
+        "color": "#D4A574",
+        "description": "Anthropic官方动态",
+        "ai_only": true
+      },
+      {
+        "name": "Google AI Blog",
+        "category": "official",
+        "url": "https://blog.google/technology/ai/rss/",
+        "icon": "🔷",
+        "color": "#4285F4",
+        "description": "Google AI官方博客",
+        "ai_only": true
+      },
+      {
+        "name": "DeepMind Blog",
+        "category": "official",
+        "url": "https://deepmind.google/blog/rss.xml",
+        "icon": "🔬",
+        "color": "#5C6BC0",
+        "description": "Google DeepMind 研究与博客",
+        "ai_only": true
+      },
+      {
+        "name": "Meta Research",
+        "category": "official",
+        "url": "https://research.facebook.com/feed/",
+        "icon": "Ⓜ️",
+        "color": "#0668E1",
+        "description": "Meta/FAIR 研究动态",
+        "ai_only": false
+      },
+      {
+        "name": "Hugging Face Blog",
+        "category": "community",
+        "url": "https://huggingface.co/blog/feed.xml",
+        "icon": "🤗",
+        "color": "#FFD21E",
+        "description": "Hugging Face官方博客",
+        "ai_only": true
+      },
+      {
+        "name": "TechCrunch AI",
+        "category": "media",
+        "url": "https://techcrunch.com/category/artificial-intelligence/feed/",
+        "icon": "💡",
+        "color": "#00A562",
+        "description": "TechCrunch AI报道",
+        "ai_only": true
+      },
+      {
+        "name": "ArXiv AI",
+        "category": "research",
+        "url": "https://arxiv.org/rss/cs.AI",
+        "icon": "📄",
+        "color": "#B31B1B",
+        "description": "ArXiv 人工智能论文",
+        "ai_only": true
+      },
+      {
+        "name": "ArXiv ML",
+        "category": "research",
+        "url": "https://arxiv.org/rss/cs.LG",
+        "icon": "📄",
+        "color": "#B31B1B",
+        "description": "ArXiv 机器学习论文",
+        "ai_only": true
+      },
+      {
+        "name": "AI Explained",
+        "category": "video",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCNJ1Ymd5yFuUPtn21xtRbbw",
+        "icon": "🎬",
+        "color": "#FF0000",
+        "description": "深度AI视频解读",
+        "ai_only": true
+      },
+      {
+        "name": "Two Minute Papers",
+        "category": "video",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCbfYPyITQ-7l4upoX8nvctg",
+        "icon": "🎬",
+        "color": "#FF0000",
+        "description": "AI论文快速解读",
+        "ai_only": true
+      },
+      {
+        "name": "Matthew Berman",
+        "category": "video",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCawZsQWqfGSbCI5yjkdVkTA",
+        "icon": "🎬",
+        "color": "#FF0000",
+        "description": "AI产品评测与新闻",
+        "ai_only": true
+      },
+      {
+        "name": "Yannic Kilcher",
+        "category": "video",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCZHmQk67mSJgfCCTn7xBfew",
+        "icon": "🎬",
+        "color": "#FF0000",
+        "description": "AI论文深度解读",
+        "ai_only": true
+      }
+    ],
+    "chinese": [
+      {
+        "name": "36氪",
+        "category": "industry",
+        "url": "https://36kr.com/feed",
+        "icon": "💼",
+        "color": "#0066FF",
+        "description": "科技产业与创投",
+        "ai_only": false
+      },
+      {
+        "name": "少数派",
+        "category": "tech",
+        "url": "https://sspai.com/feed",
+        "icon": "📱",
+        "color": "#DA282A",
+        "description": "AI工具与效率提升",
+        "ai_only": false
+      }
+    ]
+  },
+  "source_authority": {
+    "_注释": "来源权威度权重 1-5，用于排序计算",
+    "OpenAI Blog": 5,
+    "Anthropic News": 5,
+    "Google AI Blog": 5,
+    "DeepMind Blog": 5,
+    "Meta Research": 4,
+    "ArXiv AI": 4,
+    "ArXiv ML": 4,
+    "MIT Tech Review": 4,
+    "TechCrunch AI": 3,
+    "The Verge AI": 3,
+    "Ars Technica AI": 3,
+    "Hugging Face Blog": 4,
+    "Hacker News AI": 2,
+    "36氪": 2,
+    "少数派": 2,
+    "AI Explained": 3,
+    "Two Minute Papers": 3,
+    "Matthew Berman": 2,
+    "Yannic Kilcher": 3
+  },
+  "settings": {
+    "max_items_per_source": 10,
+    "max_age_hours": 48,
+    "output_file": "output/index.html",
+    "title": "AI Morning Briefing",
+    "history_file": "history.json",
+    "history_days": 7
+  }
+}
