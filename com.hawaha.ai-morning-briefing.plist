@@ -8,7 +8,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Users/liujiayun/claude_workspace/pg4_FUTURE/ai-morning-news/run_daily.sh</string>
+        <string>__SCRIPT_PATH__</string>
     </array>
 
     <key>StartCalendarInterval</key>
@@ -20,10 +20,10 @@
     </dict>
 
     <key>StandardOutPath</key>
-    <string>/Users/liujiayun/claude_workspace/pg4_FUTURE/ai-morning-news/launchd_stdout.log</string>
+    <string>__LOG_DIR__/launchd_stdout.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/liujiayun/claude_workspace/pg4_FUTURE/ai-morning-news/launchd_stderr.log</string>
+    <string>__LOG_DIR__/launchd_stderr.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>
