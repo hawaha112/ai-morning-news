@@ -91,15 +91,6 @@
         "ai_only": true
       },
       {
-        "name": "Meta Research",
-        "category": "official",
-        "url": "https://research.facebook.com/feed/",
-        "icon": "Ⓜ️",
-        "color": "#0668E1",
-        "description": "Meta/FAIR 研究动态",
-        "ai_only": false
-      },
-      {
         "name": "Hugging Face Blog",
         "category": "community",
         "url": "https://huggingface.co/blog/feed.xml",
@@ -135,42 +126,6 @@
         "description": "ArXiv 机器学习论文",
         "ai_only": true
       },
-      {
-        "name": "AI Explained",
-        "category": "video",
-        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCNJ1Ymd5yFuUPtn21xtRbbw",
-        "icon": "🎬",
-        "color": "#FF0000",
-        "description": "深度AI视频解读",
-        "ai_only": true
-      },
-      {
-        "name": "Two Minute Papers",
-        "category": "video",
-        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCbfYPyITQ-7l4upoX8nvctg",
-        "icon": "🎬",
-        "color": "#FF0000",
-        "description": "AI论文快速解读",
-        "ai_only": true
-      },
-      {
-        "name": "Matthew Berman",
-        "category": "video",
-        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCawZsQWqfGSbCI5yjkdVkTA",
-        "icon": "🎬",
-        "color": "#FF0000",
-        "description": "AI产品评测与新闻",
-        "ai_only": true
-      },
-      {
-        "name": "Yannic Kilcher",
-        "category": "video",
-        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCZHmQk67mSJgfCCTn7xBfew",
-        "icon": "🎬",
-        "color": "#FF0000",
-        "description": "AI论文深度解读",
-        "ai_only": true
-      }
     ],
     "chinese": [
       {
@@ -199,7 +154,6 @@
     "Anthropic News": 5,
     "Google AI Blog": 5,
     "DeepMind Blog": 5,
-    "Meta Research": 4,
     "ArXiv AI": 4,
     "ArXiv ML": 4,
     "MIT Tech Review": 4,

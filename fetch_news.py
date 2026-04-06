@@ -287,6 +287,137 @@ def _fetch_youtube_description(yt_url):
         return ""
 
 
+def _scrape_youtube_channel(channel_id, max_items=10):
+    """Fallback：当 YouTube RSS feed 返回 404 时，从频道页 HTML 提取视频列表
+
+    解析 ytInitialData JSON，提取视频标题、链接、发布时间。
+    比 RSS 更可靠，因为直接从前端页面数据提取。
+    """
+    # 尝试通过 channel_id 构造频道视频页 URL
+    # 注意：不用 _http_get（800KB 限制会截断 ytInitialData），直接读完整页面
+    channel_url = f"https://www.youtube.com/channel/{channel_id}/videos"
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+                          'AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+        }
+        req = urllib.request.Request(channel_url, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                html = resp.read(2_000_000).decode('utf-8', errors='replace')
+        except (ssl.SSLCertVerificationError, ssl.SSLError):
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx))
+            req = urllib.request.Request(channel_url, headers=headers)
+            with opener.open(req, timeout=15) as resp:
+                html = resp.read(2_000_000).decode('utf-8', errors='replace')
+    except Exception as e:
+        print(f"    ⚠️ YouTube 频道页抓取失败: {e}")
+        return []
+
+    # 提取 ytInitialData JSON
+    m = re.search(r'ytInitialData\s*=\s*({.*?});</script>', html, re.DOTALL)
+    if not m:
+        return []
+
+    try:
+        data = json.loads(m.group(1))
+    except json.JSONDecodeError:
+        return []
+
+    items = []
+    now = datetime.now(timezone.utc)
+
+    # 导航到视频列表
+    tabs = data.get('contents', {}).get('twoColumnBrowseResultsRenderer', {}).get('tabs', [])
+    for tab in tabs:
+        tab_content = tab.get('tabRenderer', {}).get('content', {})
+        section = tab_content.get('richGridRenderer', {})
+        contents = section.get('contents', [])
+        for entry in contents[:max_items]:
+            vid = (entry.get('richItemRenderer', {})
+                   .get('content', {})
+                   .get('videoRenderer', {}))
+            if not vid:
+                continue
+
+            title = vid.get('title', {}).get('runs', [{}])[0].get('text', '')
+            vid_id = vid.get('videoId', '')
+            if not title or not vid_id:
+                continue
+
+            link = f"https://www.youtube.com/watch?v={vid_id}"
+
+            # 尝试从 publishedTimeText 推算发布时间
+            pub_text = vid.get('publishedTimeText', {}).get('simpleText', '')
+            pub_date = _estimate_youtube_date(pub_text, now)
+
+            # 简短描述
+            desc_runs = vid.get('descriptionSnippet', {}).get('runs', [])
+            desc = ' '.join(r.get('text', '') for r in desc_runs) if desc_runs else ''
+
+            # 缩略图
+            thumbs = vid.get('thumbnail', {}).get('thumbnails', [])
+            image = thumbs[-1].get('url', '') if thumbs else ''
+
+            items.append({
+                'title': title,
+                'link': link,
+                'summary': desc[:800] if desc else '',
+                'published': pub_date,
+                'image': image,
+            })
+        if items:
+            break
+
+    return items
+
+
+def _estimate_youtube_date(pub_text, now):
+    """从 YouTube 的相对时间文本推算大致日期
+
+    支持两种格式：
+    - 全称: '3 days ago', '2 weeks ago', '1 year ago'
+    - 缩写: '3d ago', '2w ago', '4h ago'
+    """
+    if not pub_text:
+        return None
+    pub_text = pub_text.lower().strip()
+    try:
+        # 全称格式
+        m = re.search(r'(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago', pub_text)
+        if m:
+            n, unit = int(m.group(1)), m.group(2)
+        else:
+            # 缩写格式: "4w ago", "3d ago", etc.
+            m = re.search(r'(\d+)\s*([smhdwy])\w*\s+ago', pub_text)
+            if m:
+                n = int(m.group(1))
+                abbrev = m.group(2)
+                unit = {'s': 'second', 'm': 'minute', 'h': 'hour',
+                        'd': 'day', 'w': 'week', 'y': 'year'}.get(abbrev, '')
+            else:
+                return None
+
+        deltas = {
+            'second': timedelta(seconds=n),
+            'minute': timedelta(minutes=n),
+            'hour': timedelta(hours=n),
+            'day': timedelta(days=n),
+            'week': timedelta(weeks=n),
+            'month': timedelta(days=n * 30),
+            'year': timedelta(days=n * 365),
+        }
+        if unit in deltas:
+            return now - deltas[unit]
+    except Exception:
+        pass
+    return None
+
+
 def _fetch_github_readme(gh_url):
     """GitHub: 从 API 获取 README 内容"""
     try:
@@ -597,6 +728,31 @@ def fetch_feed(source, max_items=10, max_age_hours=48, health_tracker=None):
         return filtered[:max_items]
 
     except Exception as e:
+        # YouTube RSS 404 fallback：抓频道页
+        if 'youtube.com/feeds/' in url:
+            m = re.search(r'channel_id=([A-Za-z0-9_-]+)', url)
+            if m:
+                channel_id = m.group(1)
+                print(f"  🔄 {name}: RSS 失败, 尝试频道页抓取...")
+                items = _scrape_youtube_channel(channel_id, max_items)
+                if items:
+                    now = datetime.now(timezone.utc)
+                    cutoff = now - timedelta(hours=max_age_hours)
+                    filtered = [i for i in items
+                                if not i['published'] or i['published'] >= cutoff]
+                    if not filtered and items:
+                        filtered = items[:min(5, max_items)]
+                    for item in filtered[:max_items]:
+                        item['source_name'] = source['name']
+                        item['source_icon'] = source['icon']
+                        item['source_color'] = source['color']
+                        item['source_category'] = source['category']
+                    count = len(filtered[:max_items])
+                    print(f"  ✅ {name}: 频道页抓取 {count} 条")
+                    if health_tracker:
+                        health_tracker.record_success(name, count)
+                    return filtered[:max_items]
+
         print(f"  ❌ {name}: {e}")
         if health_tracker:
             health_tracker.record_failure(name, e)
