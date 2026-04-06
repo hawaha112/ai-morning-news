@@ -676,6 +676,409 @@ def _fetch_youtube_feed(source, channel_id, max_items, max_age_hours, health_tra
         return []
 
 
+def _fetch_zhihu_hot(source, max_items, max_age_hours, health_tracker):
+    """知乎热榜：通过移动端 API 获取热门话题
+
+    使用 api.zhihu.com 的 hot-lists/total 接口，无需认证。
+    返回热榜话题，包含标题、链接、热度、回答数。
+    """
+    name = source['name']
+    try:
+        api_url = f"https://api.zhihu.com/topstory/hot-lists/total?limit={max_items}"
+        headers = {
+            'User-Agent': ('Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) '
+                           'AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148'),
+            'Accept': 'application/json',
+        }
+        req = urllib.request.Request(api_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+
+        raw_items = data.get('data', [])
+        if not raw_items:
+            raise RuntimeError("知乎热榜 API 返回空数据")
+
+        now = datetime.now(timezone.utc)
+        items = []
+        for entry in raw_items[:max_items]:
+            target = entry.get('target', {})
+            title = target.get('title', '')
+            qid = target.get('id', '')
+            if not title or not qid:
+                continue
+
+            link = f"https://www.zhihu.com/question/{qid}"
+            excerpt = target.get('excerpt', '') or ''
+            heat = entry.get('detail_text', '')  # e.g. "612 万热度"
+            answer_count = target.get('answer_count', 0)
+
+            # 用 created 时间戳（如果有的话）
+            created_ts = target.get('created', 0)
+            pub_date = None
+            if created_ts:
+                try:
+                    pub_date = datetime.fromtimestamp(created_ts, tz=timezone.utc)
+                except (OSError, ValueError):
+                    pass
+
+            # 构造摘要：热度 + 回答数 + 原文摘要
+            summary_parts = []
+            if heat:
+                summary_parts.append(f"🔥 {heat}")
+            if answer_count:
+                summary_parts.append(f"💬 {answer_count} 个回答")
+            if excerpt:
+                summary_parts.append(excerpt[:500])
+            summary = ' | '.join(summary_parts)
+
+            items.append({
+                'title': title,
+                'link': link,
+                'summary': summary,
+                'published': pub_date,
+                'image': '',
+                'source_name': source['name'],
+                'source_icon': source['icon'],
+                'source_color': source['color'],
+                'source_category': source['category'],
+            })
+
+        count = len(items)
+        print(f"  ✅ {name}: 获取 {count} 条")
+        if health_tracker:
+            health_tracker.record_success(name, count)
+        return items
+
+    except Exception as e:
+        print(f"  ❌ {name}: {e}")
+        if health_tracker:
+            health_tracker.record_failure(name, e)
+        return []
+
+
+def _fetch_twitter_feed(source, query, max_items, max_age_hours, health_tracker, config):
+    """X/Twitter：通过 twikit 库抓取推文
+
+    支持两种 URL 格式：
+    - twitter://user/screen_name  — 抓取指定用户推文
+    - twitter://search/关键词     — 搜索推文
+    - twitter://list/list_id      — 抓取列表推文
+
+    需要在 config.json 中配置 twitter 块：
+    {
+        "twitter": {
+            "cookies_file": "twitter_cookies.json",
+            "language": "en"
+        }
+    }
+    cookies_file 通过 twikit 登录后 save_cookies() 生成。
+    首次使用需运行: python3 twitter_login.py
+    """
+    name = source['name']
+    twitter_config = (config or {}).get('twitter', {})
+    cookies_file = twitter_config.get('cookies_file', 'twitter_cookies.json')
+    language = twitter_config.get('language', 'en')
+
+    if not os.path.exists(cookies_file):
+        msg = (f"Twitter cookies 文件不存在: {cookies_file}\n"
+               f"    请先运行 python3 twitter_login.py 登录并生成 cookies")
+        print(f"  ⏭️ {name}: {msg}")
+        if health_tracker:
+            health_tracker.record_failure(name, RuntimeError(msg))
+        return []
+
+    try:
+        import asyncio
+        from twikit import Client as TwikitClient
+
+        async def _do_fetch():
+            client = TwikitClient(language)
+            client.load_cookies(cookies_file)
+
+            tweets = []
+            # 解析 query 类型
+            parts = query.split('/', 1)
+            qtype = parts[0]
+            qval = parts[1] if len(parts) > 1 else ''
+
+            if qtype == 'user' and qval:
+                user = await client.get_user_by_screen_name(qval)
+                result = await client.get_user_tweets(user.id, 'Tweets', count=max_items)
+                tweets = list(result)[:max_items]
+            elif qtype == 'search' and qval:
+                result = await client.search_tweet(qval, 'Latest', count=max_items)
+                tweets = list(result)[:max_items]
+            elif qtype == 'list' and qval:
+                result = await client.get_list_tweets(qval, count=max_items)
+                tweets = list(result)[:max_items]
+            else:
+                raise ValueError(f"未知 Twitter 查询格式: {query}")
+
+            return tweets
+
+        raw_tweets = asyncio.run(_do_fetch())
+
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(hours=max_age_hours)
+        items = []
+
+        for tweet in raw_tweets:
+            title = (tweet.text or '')[:120]
+            if not title:
+                continue
+            # 去掉多余换行
+            title = re.sub(r'\s+', ' ', title).strip()
+
+            link = f"https://x.com/{tweet.user.screen_name}/status/{tweet.id}"
+
+            # 解析发布时间
+            pub_date = None
+            if tweet.created_at:
+                try:
+                    # twikit 返回 "Thu Apr 03 12:34:56 +0000 2025" 格式
+                    pub_date = datetime.strptime(
+                        tweet.created_at, '%a %b %d %H:%M:%S %z %Y'
+                    )
+                except (ValueError, TypeError):
+                    pass
+
+            if pub_date and pub_date < cutoff:
+                continue
+
+            # 构造摘要
+            summary_parts = []
+            if tweet.favorite_count:
+                summary_parts.append(f"❤️ {tweet.favorite_count}")
+            if tweet.retweet_count:
+                summary_parts.append(f"🔁 {tweet.retweet_count}")
+            summary_parts.append(tweet.text or '')
+            summary = ' | '.join(summary_parts)
+
+            # 媒体图片
+            image = ''
+            if hasattr(tweet, 'media') and tweet.media:
+                for m in tweet.media:
+                    if hasattr(m, 'media_url_https'):
+                        image = m.media_url_https
+                        break
+
+            items.append({
+                'title': title,
+                'link': link,
+                'summary': summary[:800],
+                'published': pub_date,
+                'image': image,
+                'source_name': source['name'],
+                'source_icon': source['icon'],
+                'source_color': source['color'],
+                'source_category': source['category'],
+            })
+
+        count = len(items)
+        print(f"  ✅ {name}: 获取 {count} 条")
+        if health_tracker:
+            health_tracker.record_success(name, count)
+        return items
+
+    except ImportError:
+        print(f"  ⏭️ {name}: twikit 未安装，请运行 pip install twikit")
+        return []
+    except Exception as e:
+        print(f"  ❌ {name}: {e}")
+        if health_tracker:
+            health_tracker.record_failure(name, e)
+        return []
+
+
+def _fetch_xiaohongshu(source, query, max_items, max_age_hours, health_tracker, config):
+    """小红书：通过 xhs 库搜索/抓取笔记
+
+    支持两种 URL 格式：
+    - xhs://search/关键词     — 按关键词搜索笔记
+    - xhs://user/user_id     — 抓取指定用户的笔记
+
+    需要在 config.json 中配置 xiaohongshu 块：
+    {
+        "xiaohongshu": {
+            "cookie": "从浏览器 DevTools 复制的 cookie 字符串"
+        }
+    }
+    """
+    name = source['name']
+    xhs_config = (config or {}).get('xiaohongshu', {})
+    cookie = xhs_config.get('cookie', '')
+
+    if not cookie:
+        msg = ("小红书 cookie 未配置\n"
+               "    请在 config.json 的 xiaohongshu.cookie 填入浏览器 cookie")
+        print(f"  ⏭️ {name}: {msg}")
+        if health_tracker:
+            health_tracker.record_failure(name, RuntimeError(msg))
+        return []
+
+    try:
+        from xhs import XhsClient
+
+        xhs_client = XhsClient(cookie=cookie)
+
+        parts = query.split('/', 1)
+        qtype = parts[0]
+        qval = parts[1] if len(parts) > 1 else ''
+
+        notes_data = []
+        if qtype == 'search' and qval:
+            result = xhs_client.get_note_by_keyword(
+                qval, page=1, page_size=max_items
+            )
+            notes_data = result.get('items', []) if isinstance(result, dict) else []
+        elif qtype == 'user' and qval:
+            result = xhs_client.get_user_notes(qval)
+            notes_data = result.get('notes', []) if isinstance(result, dict) else []
+            notes_data = notes_data[:max_items]
+        else:
+            raise ValueError(f"未知小红书查询格式: {query}")
+
+        now = datetime.now(timezone.utc)
+        items = []
+
+        for note_info in notes_data[:max_items]:
+            # 搜索结果里嵌套在 note_card 下
+            note = note_info.get('note_card', note_info) if isinstance(note_info, dict) else {}
+            if not note:
+                continue
+
+            title = note.get('display_title', '') or note.get('title', '')
+            if not title:
+                title = (note.get('desc', '') or '')[:80]
+            if not title:
+                continue
+
+            note_id = note.get('note_id', '') or note_info.get('id', '')
+            link = f"https://www.xiaohongshu.com/explore/{note_id}" if note_id else ''
+
+            # 互动数据
+            interact = note.get('interact_info', {})
+            liked_count = interact.get('liked_count', '')
+            comment_count = interact.get('comment_count', '')
+
+            summary_parts = []
+            if liked_count:
+                summary_parts.append(f"❤️ {liked_count}")
+            if comment_count:
+                summary_parts.append(f"💬 {comment_count}")
+            desc = note.get('desc', '')
+            if desc:
+                summary_parts.append(desc[:500])
+            summary = ' | '.join(summary_parts)
+
+            # 封面图
+            image = ''
+            cover = note.get('cover', {})
+            if cover:
+                image = cover.get('url', '') or cover.get('url_default', '')
+                # xhs 图片 URL 可能需要加前缀
+                if image and not image.startswith('http'):
+                    image = f"https://sns-img-bd.xhscdn.com/{image}"
+
+            items.append({
+                'title': title,
+                'link': link,
+                'summary': summary[:800],
+                'published': None,  # 小红书搜索结果不含精确时间
+                'image': image,
+                'source_name': source['name'],
+                'source_icon': source['icon'],
+                'source_color': source['color'],
+                'source_category': source['category'],
+            })
+
+        count = len(items)
+        print(f"  ✅ {name}: 获取 {count} 条")
+        if health_tracker:
+            health_tracker.record_success(name, count)
+        return items
+
+    except ImportError:
+        print(f"  ⏭️ {name}: xhs 未安装，请运行 pip install xhs")
+        return []
+    except Exception as e:
+        print(f"  ❌ {name}: {e}")
+        if health_tracker:
+            health_tracker.record_failure(name, e)
+        return []
+
+
+def _fetch_wewe_rss(source, account_id, max_items, max_age_hours, health_tracker, config):
+    """微信公众号（WeWe RSS）：通过自建 WeWe RSS 实例获取文章
+
+    URL 格式：wewe-rss://account_id
+
+    需要在 config.json 中配置 wewe_rss 块：
+    {
+        "wewe_rss": {
+            "base_url": "http://localhost:3000",
+        }
+    }
+    部署方式：docker run -d -p 3000:3000 cooderl/wewe-rss-server
+    """
+    name = source['name']
+    wewe_config = (config or {}).get('wewe_rss', {})
+    base_url = wewe_config.get('base_url', 'http://localhost:3000').rstrip('/')
+
+    if not base_url or base_url == 'http://localhost:3000':
+        # 检查是否能访问
+        check_url = f"{base_url}/feeds"
+        try:
+            req = urllib.request.Request(check_url, headers={
+                'User-Agent': 'AI-Morning-Briefing/2.0'
+            })
+            urllib.request.urlopen(req, timeout=5)
+        except Exception:
+            msg = ("WeWe RSS 实例未运行或无法访问\n"
+                   "    请部署: docker run -d -p 3000:3000 cooderl/wewe-rss-server")
+            print(f"  ⏭️ {name}: {msg}")
+            if health_tracker:
+                health_tracker.record_failure(name, RuntimeError(msg))
+            return []
+
+    # WeWe RSS 输出标准 RSS
+    rss_url = f"{base_url}/feeds/{account_id}.xml"
+    headers = {
+        'User-Agent': 'AI-Morning-Briefing/2.0',
+        'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+    }
+
+    try:
+        req = urllib.request.Request(rss_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            xml_text = resp.read().decode('utf-8', errors='replace')
+
+        items = parse_rss(xml_text)
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(hours=max_age_hours)
+        filtered = [i for i in items if not i['published'] or i['published'] >= cutoff]
+        if not filtered and items:
+            filtered = items[:min(5, max_items)]
+
+        for item in filtered[:max_items]:
+            item['source_name'] = source['name']
+            item['source_icon'] = source['icon']
+            item['source_color'] = source['color']
+            item['source_category'] = source['category']
+
+        count = len(filtered[:max_items])
+        print(f"  ✅ {name}: 获取 {count} 条")
+        if health_tracker:
+            health_tracker.record_success(name, count)
+        return filtered[:max_items]
+
+    except Exception as e:
+        print(f"  ❌ {name}: {e}")
+        if health_tracker:
+            health_tracker.record_failure(name, e)
+        return []
+
+
 def _fetch_wechat_feed(source, feed_id, wechat_config, max_items, max_age_hours, health_tracker):
     """微信公众号：通过 we-mp-rss 实例获取 RSS"""
     name = source['name']
@@ -732,6 +1135,25 @@ def fetch_feed(source, max_items=10, max_age_hours=48, health_tracker=None, conf
     if url.startswith('youtube://'):
         channel_id = url.replace('youtube://', '')
         return _fetch_youtube_feed(source, channel_id, max_items, max_age_hours, health_tracker)
+
+    # 知乎热榜：通过移动端 API
+    if url.startswith('zhihu://'):
+        return _fetch_zhihu_hot(source, max_items, max_age_hours, health_tracker)
+
+    # X/Twitter：通过 twikit 库
+    if url.startswith('twitter://'):
+        query = url.replace('twitter://', '')
+        return _fetch_twitter_feed(source, query, max_items, max_age_hours, health_tracker, config)
+
+    # 小红书：通过 xhs 库
+    if url.startswith('xhs://'):
+        query = url.replace('xhs://', '')
+        return _fetch_xiaohongshu(source, query, max_items, max_age_hours, health_tracker, config)
+
+    # 微信公众号（WeWe RSS）
+    if url.startswith('wewe-rss://'):
+        account_id = url.replace('wewe-rss://', '')
+        return _fetch_wewe_rss(source, account_id, max_items, max_age_hours, health_tracker, config)
 
     # 微信公众号：通过 we-mp-rss 实例
     if url.startswith('wechat://'):

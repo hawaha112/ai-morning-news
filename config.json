@@ -226,8 +226,84 @@
         "color": "#0984E3",
         "description": "AI 行业动态",
         "ai_only": true
+      },
+      {
+        "name": "知乎热榜",
+        "category": "community",
+        "url": "zhihu://hot",
+        "icon": "💭",
+        "color": "#0066FF",
+        "description": "知乎热门 AI 话题",
+        "ai_only": false
+      },
+      {
+        "name": "知乎日报",
+        "category": "media",
+        "url": "https://rsshub.rssforever.com/zhihu/daily",
+        "icon": "📰",
+        "color": "#0084FF",
+        "description": "知乎日报精选",
+        "ai_only": false
+      },
+      {
+        "name": "X-AI热点",
+        "category": "community",
+        "url": "twitter://search/AI OR LLM OR GPT lang:en",
+        "icon": "🐦",
+        "color": "#1DA1F2",
+        "description": "X/Twitter AI 热门讨论",
+        "ai_only": true
+      },
+      {
+        "name": "X-OpenAI",
+        "category": "official",
+        "url": "twitter://user/OpenAI",
+        "icon": "🐦",
+        "color": "#1DA1F2",
+        "description": "OpenAI 官方推文",
+        "ai_only": true
+      },
+      {
+        "name": "X-AnthropicAI",
+        "category": "official",
+        "url": "twitter://user/AnthropicAI",
+        "icon": "🐦",
+        "color": "#1DA1F2",
+        "description": "Anthropic 官方推文",
+        "ai_only": true
+      },
+      {
+        "name": "小红书AI",
+        "category": "community",
+        "url": "xhs://search/AI工具",
+        "icon": "📕",
+        "color": "#FE2C55",
+        "description": "小红书 AI 工具分享",
+        "ai_only": true
+      },
+      {
+        "name": "小红书ChatGPT",
+        "category": "community",
+        "url": "xhs://search/ChatGPT教程",
+        "icon": "📕",
+        "color": "#FE2C55",
+        "description": "小红书 ChatGPT 使用技巧",
+        "ai_only": true
       }
     ]
+  },
+  "twitter": {
+    "cookies_file": "twitter_cookies.json",
+    "language": "en",
+    "_注释": "首次使用需运行 python3 twitter_login.py 登录生成 cookies"
+  },
+  "xiaohongshu": {
+    "cookie": "",
+    "_注释": "从浏览器 DevTools → Application → Cookies 复制小红书的完整 cookie 字符串"
+  },
+  "wewe_rss": {
+    "base_url": "http://localhost:3000",
+    "_注释": "WeWe RSS 实例地址。部署: docker run -d -p 3000:3000 cooderl/wewe-rss-server"
   },
   "wechat_rss": {
     "base_url": "http://localhost:8001",
@@ -258,7 +334,14 @@
     "掘金 AI": 2,
     "机器之心": 4,
     "量子位": 3,
-    "新智元": 3
+    "新智元": 3,
+    "知乎热榜": 2,
+    "知乎日报": 3,
+    "X-AI热点": 2,
+    "X-OpenAI": 5,
+    "X-AnthropicAI": 5,
+    "小红书AI": 1,
+    "小红书ChatGPT": 1
   },
   "settings": {
     "max_items_per_source": 10,

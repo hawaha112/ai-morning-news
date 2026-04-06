@@ -24,3 +24,4 @@ fetch_news_v1.py
 
 # Secrets (tokens stored in ~/.config/ai-briefing/.env)
 .env
+twitter_cookies.json

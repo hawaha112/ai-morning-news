@@ -1,0 +1,11 @@
+# AI Morning Briefing - 依赖列表
+# 核心功能（纯标准库即可运行基本 RSS 抓取）
+
+# X/Twitter 抓取（可选 — 需配置 cookies）
+twikit>=2.0
+
+# 小红书抓取（可选 — 需配置 cookies）
+xhs>=0.2
+
+# LLM 分析用（如果用 OpenAI 兼容 API）
+# openai 或其他兼容库按需安装
