@@ -309,32 +309,19 @@
         "ai_only": false
       },
       {
-        "name": "小红书AI",
+        "name": "小红书热门",
         "category": "community",
-        "url": "xhs://search/AI工具",
+        "url": "xhs://explore",
         "icon": "📕",
         "color": "#FE2C55",
-        "description": "小红书 AI 工具分享",
-        "ai_only": true
-      },
-      {
-        "name": "小红书ChatGPT",
-        "category": "community",
-        "url": "xhs://search/ChatGPT教程",
-        "icon": "📕",
-        "color": "#FE2C55",
-        "description": "小红书 ChatGPT 使用技巧",
-        "ai_only": true
+        "description": "小红书推荐 feed（通过 AI 关键词过滤）",
+        "ai_only": false
       }
     ]
   },
   "twitter": {
     "nitter_instances": ["https://nitter.net"],
     "_注释": "通过 Nitter 公共镜像获取 Twitter RSS，无需登录。可添加备用实例。"
-  },
-  "xiaohongshu": {
-    "cookie": "",
-    "_注释": "从浏览器 DevTools → Application → Cookies 复制小红书的完整 cookie 字符串"
   },
   "wewe_rss": {
     "base_url": "http://localhost:3000",
@@ -379,8 +366,7 @@
     "X-Yann LeCun": 4,
     "X-Andrew Ng": 4,
     "AI前线": 3,
-    "小红书AI": 1,
-    "小红书ChatGPT": 1
+    "小红书热门": 1
   },
   "settings": {
     "max_items_per_source": 10,

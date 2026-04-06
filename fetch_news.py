@@ -836,102 +836,96 @@ def _fetch_twitter_feed(source, screen_name, max_items, max_age_hours, health_tr
 
 
 def _fetch_xiaohongshu(source, query, max_items, max_age_hours, health_tracker, config):
-    """小红书：通过 xhs 库搜索/抓取笔记（需要 cookie）
+    """小红书：从 explore 页面 SSR 数据提取笔记（免登录）
 
-    ⚠️ 小红书无任何免登录公开 API，所有方式都需要浏览器 cookie。
-    没有配置 cookie 时会优雅跳过，不影响其他源。
+    原理：小红书首页 /explore 会在 HTML 中内嵌 window.__INITIAL_STATE__，
+    包含 ~25 条推荐笔记的完整数据（标题、作者、点赞、封面等），
+    无需任何登录或 cookie。
 
-    支持两种 URL 格式：
-    - xhs://search/关键词     — 按关键词搜索笔记
-    - xhs://user/user_id     — 抓取指定用户的笔记
-
-    配置方法：
-    1. 用 Chrome 打开 https://www.xiaohongshu.com 并登录
-    2. F12 → Application → Cookies → 全选复制 cookie 字符串
-    3. 粘贴到 config.json 的 xiaohongshu.cookie 字段
-    未配置时该源自动跳过。
+    URL 格式：
+    - xhs://explore                          — 默认推荐 feed
+    - xhs://explore/homefeed.career_v3       — 指定频道
+    配合 ai_only: false + 关键词预过滤，可筛出 AI 相关内容。
     """
     name = source['name']
-    xhs_config = (config or {}).get('xiaohongshu', {})
-    cookie = xhs_config.get('cookie', '')
-
-    if not cookie:
-        msg = ("小红书 cookie 未配置\n"
-               "    请在 config.json 的 xiaohongshu.cookie 填入浏览器 cookie")
-        print(f"  ⏭️ {name}: {msg}")
-        if health_tracker:
-            health_tracker.record_failure(name, RuntimeError(msg))
-        return []
 
     try:
-        from xhs import XhsClient
+        # 解析频道参数
+        channel_id = ''
+        if '/' in query:
+            _, channel_id = query.split('/', 1)
 
-        xhs_client = XhsClient(cookie=cookie)
+        explore_url = 'https://www.xiaohongshu.com/explore'
+        if channel_id:
+            explore_url += f'?channel_id={channel_id}'
 
-        parts = query.split('/', 1)
-        qtype = parts[0]
-        qval = parts[1] if len(parts) > 1 else ''
+        headers = {
+            'User-Agent': ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+                           'AppleWebKit/537.36 (KHTML, like Gecko) '
+                           'Chrome/120.0.0.0 Safari/537.36'),
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        }
+        req = urllib.request.Request(explore_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            html = resp.read(1_000_000).decode('utf-8', errors='replace')
 
-        notes_data = []
-        if qtype == 'search' and qval:
-            result = xhs_client.get_note_by_keyword(
-                qval, page=1, page_size=max_items
-            )
-            notes_data = result.get('items', []) if isinstance(result, dict) else []
-        elif qtype == 'user' and qval:
-            result = xhs_client.get_user_notes(qval)
-            notes_data = result.get('notes', []) if isinstance(result, dict) else []
-            notes_data = notes_data[:max_items]
-        else:
-            raise ValueError(f"未知小红书查询格式: {query}")
+        # 提取 SSR 状态数据
+        m = re.search(
+            r'window\.__INITIAL_STATE__\s*=\s*(.*?)(?:</script>)',
+            html, re.DOTALL
+        )
+        if not m:
+            raise RuntimeError("页面中未找到 __INITIAL_STATE__")
 
-        now = datetime.now(timezone.utc)
+        state_raw = m.group(1).strip().rstrip(';')
+        # XHS 的 state 中有 JS 的 undefined，替换为 null 才能解析 JSON
+        state_raw = state_raw.replace('undefined', 'null')
+        state = json.loads(state_raw)
+
+        feeds = state.get('feed', {}).get('feeds', [])
+        if not feeds:
+            raise RuntimeError("SSR feed 数据为空")
+
         items = []
-
-        for note_info in notes_data[:max_items]:
-            # 搜索结果里嵌套在 note_card 下
-            note = note_info.get('note_card', note_info) if isinstance(note_info, dict) else {}
+        for entry in feeds:
+            note = entry.get('noteCard', {})
             if not note:
                 continue
 
-            title = note.get('display_title', '') or note.get('title', '')
-            if not title:
-                title = (note.get('desc', '') or '')[:80]
+            title = note.get('displayTitle', '')
             if not title:
                 continue
 
-            note_id = note.get('note_id', '') or note_info.get('id', '')
+            note_id = entry.get('id', '')
             link = f"https://www.xiaohongshu.com/explore/{note_id}" if note_id else ''
 
+            # 作者
+            user = note.get('user', {})
+            nickname = user.get('nickName', '')
+
             # 互动数据
-            interact = note.get('interact_info', {})
-            liked_count = interact.get('liked_count', '')
-            comment_count = interact.get('comment_count', '')
+            interact = note.get('interactInfo', {})
+            liked_count = interact.get('likedCount', '')
 
             summary_parts = []
+            if nickname:
+                summary_parts.append(f"👤 {nickname}")
             if liked_count:
                 summary_parts.append(f"❤️ {liked_count}")
-            if comment_count:
-                summary_parts.append(f"💬 {comment_count}")
-            desc = note.get('desc', '')
-            if desc:
-                summary_parts.append(desc[:500])
             summary = ' | '.join(summary_parts)
 
             # 封面图
-            image = ''
             cover = note.get('cover', {})
-            if cover:
-                image = cover.get('url', '') or cover.get('url_default', '')
-                # xhs 图片 URL 可能需要加前缀
-                if image and not image.startswith('http'):
-                    image = f"https://sns-img-bd.xhscdn.com/{image}"
+            image = cover.get('urlDefault', '') or cover.get('url', '')
+            if image and not image.startswith('http'):
+                image = f"https://sns-img-bd.xhscdn.com/{image}"
 
             items.append({
                 'title': title,
                 'link': link,
                 'summary': summary[:800],
-                'published': None,  # 小红书搜索结果不含精确时间
+                'published': None,  # SSR 数据不含精确时间
                 'image': image,
                 'source_name': source['name'],
                 'source_icon': source['icon'],
@@ -939,15 +933,15 @@ def _fetch_xiaohongshu(source, query, max_items, max_age_hours, health_tracker, 
                 'source_category': source['category'],
             })
 
+            if len(items) >= max_items:
+                break
+
         count = len(items)
-        print(f"  ✅ {name}: 获取 {count} 条")
+        print(f"  ✅ {name}: 获取 {count} 条（SSR 免登录）")
         if health_tracker:
             health_tracker.record_success(name, count)
         return items
 
-    except ImportError:
-        print(f"  ⏭️ {name}: xhs 未安装，请运行 pip install xhs")
-        return []
     except Exception as e:
         print(f"  ❌ {name}: {e}")
         if health_tracker:
