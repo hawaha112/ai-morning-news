@@ -125,7 +125,7 @@
         "color": "#B31B1B",
         "description": "ArXiv 机器学习论文",
         "ai_only": true
-      },
+      }
     ],
     "chinese": [
       {
@@ -163,11 +163,7 @@
     "Hugging Face Blog": 4,
     "Hacker News AI": 2,
     "36氪": 2,
-    "少数派": 2,
-    "AI Explained": 3,
-    "Two Minute Papers": 3,
-    "Matthew Berman": 2,
-    "Yannic Kilcher": 3
+    "少数派": 2
   },
   "settings": {
     "max_items_per_source": 10,

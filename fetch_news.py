@@ -21,7 +21,6 @@ from html import escape
 import concurrent.futures
 import urllib.request
 import urllib.error
-import ssl
 import time
 
 # 本地模块
@@ -209,7 +208,7 @@ def parse_rss(xml_text):
                     })
     except ET.ParseError as e:
         print(f"  [XML解析错误] {e}")
-    except Exception as e:
+    except (KeyError, ValueError, AttributeError) as e:
         print(f"  [解析异常] {e}")
     return items
 
@@ -218,16 +217,8 @@ def parse_rss(xml_text):
 # 第二部分：文章正文抓取
 # ═══════════════════════════════════════════════════════════════════════
 
-def _make_nossl_opener():
-    """创建跳过 SSL 验证的 opener（仅用于证书有问题的服务器）"""
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-    return urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx))
-
-
 def _http_get(url, timeout=10):
-    """通用 HTTP GET（优先验证 SSL，证书问题时自动降级）"""
+    """通用 HTTP GET"""
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
                        'AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -236,18 +227,12 @@ def _http_get(url, timeout=10):
         'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8',
     }
     req = urllib.request.Request(url, headers=headers)
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = resp.read(800_000)
-    except (ssl.SSLCertVerificationError, ssl.SSLError):
-        opener = _make_nossl_opener()
-        req = urllib.request.Request(url, headers=headers)
-        with opener.open(req, timeout=timeout) as resp:
-            data = resp.read(800_000)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        data = resp.read(800_000)
     for enc in ['utf-8', 'latin-1', 'gb2312', 'gbk']:
         try:
             return data.decode(enc)
-        except:
+        except UnicodeDecodeError:
             continue
     return data.decode('utf-8', errors='replace')
 
@@ -262,7 +247,7 @@ def _resolve_hn_real_url(hn_url):
             if real_url.startswith('item?'):
                 return ""
             return real_url
-    except:
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError, ValueError):
         pass
     return ""
 
@@ -283,7 +268,7 @@ def _fetch_youtube_description(yt_url):
             if m3 and len(m3.group(1)) > len(desc):
                 desc = m3.group(1)
         return _clean_html(desc)
-    except:
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError, ValueError):
         return ""
 
 
@@ -303,18 +288,9 @@ def _scrape_youtube_channel(channel_id, max_items=10):
             'Accept-Language': 'en-US,en;q=0.9',
         }
         req = urllib.request.Request(channel_url, headers=headers)
-        try:
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                html = resp.read(2_000_000).decode('utf-8', errors='replace')
-        except (ssl.SSLCertVerificationError, ssl.SSLError):
-            ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-            opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx))
-            req = urllib.request.Request(channel_url, headers=headers)
-            with opener.open(req, timeout=15) as resp:
-                html = resp.read(2_000_000).decode('utf-8', errors='replace')
-    except Exception as e:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            html = resp.read(2_000_000).decode('utf-8', errors='replace')
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError) as e:
         print(f"    ⚠️ YouTube 频道页抓取失败: {e}")
         return []
 
@@ -413,7 +389,7 @@ def _estimate_youtube_date(pub_text, now):
         }
         if unit in deltas:
             return now - deltas[unit]
-    except Exception:
+    except (ValueError, OverflowError):
         pass
     return None
 
@@ -436,7 +412,7 @@ def _fetch_github_readme(gh_url):
         readme = re.sub(r'[*_`~]{1,3}', '', readme)
         readme = re.sub(r'\n{3,}', '\n\n', readme)
         return readme[:2000].strip()
-    except:
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError, ValueError):
         return ""
 
 
@@ -484,7 +460,7 @@ def _extract_article_body(html_text):
             body = ld.get('articleBody', '') or ld.get('description', '')
             if body and len(body) > 80:
                 candidates.append(('json_ld', _clean_html(body)))
-        except:
+        except (json.JSONDecodeError, KeyError, TypeError, IndexError):
             pass
 
     # 策略4: meta description
@@ -551,7 +527,7 @@ def _fetch_article_text(url, source_name=""):
             return ""
         html = _http_get(url, timeout=10)
         return _extract_article_body(html)
-    except Exception:
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError, ValueError):
         return ""
 
 
@@ -574,7 +550,7 @@ def enrich_articles_with_content(items):
                 if text and len(text) > 30:
                     items[idx]['article_text'] = text
                     success += 1
-            except:
+            except (urllib.error.URLError, urllib.error.HTTPError, OSError, ValueError):
                 pass
     print(f"  📥 成功抓取 {success}/{len(to_fetch)} 篇原文")
 
@@ -609,7 +585,7 @@ class SourceHealthTracker:
             try:
                 with open(self.health_path, 'r', encoding='utf-8') as f:
                     return json.load(f)
-            except Exception:
+            except (json.JSONDecodeError, OSError):
                 pass
         return {}
 
@@ -617,7 +593,7 @@ class SourceHealthTracker:
         try:
             with open(self.health_path, 'w', encoding='utf-8') as f:
                 json.dump(self.data, f, ensure_ascii=False, indent=2)
-        except Exception as e:
+        except OSError as e:
             print(f"  ⚠️ 健康度数据保存失败: {e}")
 
     def record_success(self, source_name: str, item_count: int):
@@ -685,18 +661,8 @@ def fetch_feed(source, max_items=10, max_age_hours=48, health_tracker=None):
 
     try:
         req = urllib.request.Request(url, headers=headers)
-        try:
-            opener = urllib.request.build_opener(SmartRedirectHandler)
-            resp_ctx = opener.open(req, timeout=20)
-        except (ssl.SSLCertVerificationError, ssl.SSLError):
-            ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-            opener = urllib.request.build_opener(
-                SmartRedirectHandler, urllib.request.HTTPSHandler(context=ctx))
-            req = urllib.request.Request(url, headers=headers)
-            resp_ctx = opener.open(req, timeout=20)
-        with resp_ctx as resp:
+        opener = urllib.request.build_opener(SmartRedirectHandler)
+        with opener.open(req, timeout=20) as resp:
             data = resp.read()
             for encoding in ['utf-8', 'latin-1', 'gb2312', 'gbk']:
                 try:
@@ -727,7 +693,8 @@ def fetch_feed(source, max_items=10, max_age_hours=48, health_tracker=None):
             health_tracker.record_success(name, count)
         return filtered[:max_items]
 
-    except Exception as e:
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError,
+            ET.ParseError, UnicodeDecodeError) as e:
         # YouTube RSS 404 fallback：抓频道页
         if 'youtube.com/feeds/' in url:
             m = re.search(r'channel_id=([A-Za-z0-9_-]+)', url)
@@ -762,27 +729,6 @@ def fetch_feed(source, max_items=10, max_age_hours=48, health_tracker=None):
 # ═══════════════════════════════════════════════════════════════════════
 # 第三-B部分：去重 & 历史追踪
 # ═══════════════════════════════════════════════════════════════════════
-
-def _normalize_url(url):
-    """规范化 URL 用于去重比较"""
-    if not url:
-        return ""
-    url = url.strip().rstrip('/')
-    url = re.sub(r'^https?://(www\.)?', '', url)
-    url = re.sub(r'[?#].*$', '', url)
-    return url.lower()
-
-
-def _title_similarity(t1, t2):
-    """简易标题相似度（基于词集合 Jaccard）"""
-    if not t1 or not t2:
-        return 0.0
-    words1 = set(re.findall(r'\w+', t1.lower()))
-    words2 = set(re.findall(r'\w+', t2.lower()))
-    if not words1 or not words2:
-        return 0.0
-    return len(words1 & words2) / len(words1 | words2)
-
 
 # AI 相关关键词（用于对非 ai_only 源做预过滤）
 _AI_KEYWORDS = re.compile(
@@ -830,82 +776,6 @@ def _keyword_prefilter(items, ai_only_sources):
     if filtered > 0:
         print(f"  🔍 关键词预过滤移除 {filtered} 条明显非 AI 内容（节省 LLM 调用）")
     return result
-
-
-def deduplicate_items(items):
-    """去重：基于 URL 和标题相似度"""
-    seen_urls = {}
-    result = []
-    for item in items:
-        url_key = _normalize_url(item.get('link', ''))
-        title = item.get('title', '')
-
-        # URL 完全相同
-        if url_key and url_key in seen_urls:
-            continue
-
-        # 标题相似度 > 0.7
-        is_dup = False
-        for existing in result:
-            if _title_similarity(title, existing.get('title', '')) > 0.7:
-                is_dup = True
-                break
-        if is_dup:
-            continue
-
-        if url_key:
-            seen_urls[url_key] = True
-        result.append(item)
-
-    removed = len(items) - len(result)
-    if removed > 0:
-        print(f"  🔄 去重移除 {removed} 条重复内容")
-    return result
-
-
-def load_history(history_path, max_days=7):
-    """加载历史记录"""
-    if not history_path.exists():
-        return {}
-    try:
-        with open(history_path, 'r', encoding='utf-8') as f:
-            history = json.load(f)
-        # 清理过期记录
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=max_days)).isoformat()
-        history = {k: v for k, v in history.items() if v.get('date', '') >= cutoff}
-        return history
-    except Exception as e:
-        print(f"  ⚠️ 历史记录加载失败: {e}")
-        return {}
-
-
-def save_history(history_path, history, new_items):
-    """保存历史记录"""
-    now = datetime.now(timezone.utc).isoformat()
-    for item in new_items:
-        url_key = _normalize_url(item.get('link', ''))
-        if url_key:
-            history[url_key] = {
-                'title': item.get('title', ''),
-                'date': now,
-            }
-    try:
-        with open(history_path, 'w', encoding='utf-8') as f:
-            json.dump(history, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"  ⚠️ 历史记录保存失败: {e}")
-
-
-def mark_seen_items(items, history):
-    """标记已在历史中出现过的条目"""
-    for item in items:
-        url_key = _normalize_url(item.get('link', ''))
-        item['_is_new'] = url_key not in history if url_key else True
-    new_count = sum(1 for i in items if i.get('_is_new', True))
-    old_count = len(items) - new_count
-    if old_count > 0:
-        print(f"  📜 {new_count} 条新内容，{old_count} 条往期已收录")
-    return items
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -989,7 +859,7 @@ def generate_html(all_items, config, digest=None):
         if item.get('published'):
             try:
                 pub_str = item['published'].strftime("%m-%d %H:%M")
-            except:
+            except (AttributeError, ValueError):
                 pass
 
         link = escape(item.get('link', '#'))
