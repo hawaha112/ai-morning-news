@@ -27,6 +27,7 @@ import time
 from llm_analyzer import LLMAnalyzer, create_analyzer_from_config
 from dedup_engine import DedupEngine
 from source_ranker import SourceRanker
+from causal_engine import CausalKB
 
 # ═══════════════════════════════════════════════════════════════════════
 # 第一部分：RSS 解析（纯标准库）
@@ -756,133 +757,77 @@ def _fetch_zhihu_hot(source, max_items, max_age_hours, health_tracker):
         return []
 
 
-def _fetch_twitter_feed(source, query, max_items, max_age_hours, health_tracker, config):
-    """X/Twitter：通过 twikit 库抓取推文
+def _fetch_twitter_feed(source, screen_name, max_items, max_age_hours, health_tracker, config):
+    """X/Twitter：通过 Nitter RSS 镜像抓取推文（免登录）
 
-    支持两种 URL 格式：
-    - twitter://user/screen_name  — 抓取指定用户推文
-    - twitter://search/关键词     — 搜索推文
-    - twitter://list/list_id      — 抓取列表推文
+    URL 格式：twitter://screen_name
 
-    需要在 config.json 中配置 twitter 块：
-    {
-        "twitter": {
-            "cookies_file": "twitter_cookies.json",
-            "language": "en"
-        }
-    }
-    cookies_file 通过 twikit 登录后 save_cookies() 生成。
-    首次使用需运行: python3 twitter_login.py
+    原理：nitter.net 等 Nitter 实例提供公开的 Twitter 用户 RSS，
+    无需任何账号或 cookies。自动尝试多个 Nitter 镜像。
     """
     name = source['name']
     twitter_config = (config or {}).get('twitter', {})
-    cookies_file = twitter_config.get('cookies_file', 'twitter_cookies.json')
-    language = twitter_config.get('language', 'en')
+    # 允许用户自定义 Nitter 实例列表
+    nitter_instances = twitter_config.get('nitter_instances', [
+        'https://nitter.net',
+    ])
 
-    if not os.path.exists(cookies_file):
-        msg = (f"Twitter cookies 文件不存在: {cookies_file}\n"
-               f"    请先运行 python3 twitter_login.py 登录并生成 cookies")
-        print(f"  ⏭️ {name}: {msg}")
+    rss_xml = None
+    last_err = None
+    for base in nitter_instances:
+        rss_url = f"{base.rstrip('/')}/{screen_name}/rss"
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+                              'AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+            }
+            req = urllib.request.Request(rss_url, headers=headers)
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                rss_xml = resp.read().decode('utf-8', errors='replace')
+                if '<item>' in rss_xml:
+                    break  # 成功拿到有内容的 RSS
+                rss_xml = None
+        except Exception as e:
+            last_err = e
+            continue
+
+    if not rss_xml:
+        err_msg = f"所有 Nitter 实例均失败: {last_err}"
+        print(f"  ❌ {name}: {err_msg}")
         if health_tracker:
-            health_tracker.record_failure(name, RuntimeError(msg))
+            health_tracker.record_failure(name, RuntimeError(err_msg))
         return []
 
     try:
-        import asyncio
-        from twikit import Client as TwikitClient
-
-        async def _do_fetch():
-            client = TwikitClient(language)
-            client.load_cookies(cookies_file)
-
-            tweets = []
-            # 解析 query 类型
-            parts = query.split('/', 1)
-            qtype = parts[0]
-            qval = parts[1] if len(parts) > 1 else ''
-
-            if qtype == 'user' and qval:
-                user = await client.get_user_by_screen_name(qval)
-                result = await client.get_user_tweets(user.id, 'Tweets', count=max_items)
-                tweets = list(result)[:max_items]
-            elif qtype == 'search' and qval:
-                result = await client.search_tweet(qval, 'Latest', count=max_items)
-                tweets = list(result)[:max_items]
-            elif qtype == 'list' and qval:
-                result = await client.get_list_tweets(qval, count=max_items)
-                tweets = list(result)[:max_items]
-            else:
-                raise ValueError(f"未知 Twitter 查询格式: {query}")
-
-            return tweets
-
-        raw_tweets = asyncio.run(_do_fetch())
+        items = parse_rss(rss_xml)
 
         now = datetime.now(timezone.utc)
         cutoff = now - timedelta(hours=max_age_hours)
-        items = []
+        filtered = [i for i in items if not i['published'] or i['published'] >= cutoff]
+        if not filtered and items:
+            filtered = items[:min(5, max_items)]
 
-        for tweet in raw_tweets:
-            title = (tweet.text or '')[:120]
-            if not title:
-                continue
-            # 去掉多余换行
-            title = re.sub(r'\s+', ' ', title).strip()
+        # 修正链接：nitter URL → x.com URL
+        for item in filtered[:max_items]:
+            if item.get('link'):
+                item['link'] = re.sub(
+                    r'https?://nitter\.[^/]+/',
+                    'https://x.com/',
+                    item['link']
+                )
+                item['link'] = item['link'].replace('#m', '')  # 去掉 nitter 锚点
+            item['source_name'] = source['name']
+            item['source_icon'] = source['icon']
+            item['source_color'] = source['color']
+            item['source_category'] = source['category']
 
-            link = f"https://x.com/{tweet.user.screen_name}/status/{tweet.id}"
-
-            # 解析发布时间
-            pub_date = None
-            if tweet.created_at:
-                try:
-                    # twikit 返回 "Thu Apr 03 12:34:56 +0000 2025" 格式
-                    pub_date = datetime.strptime(
-                        tweet.created_at, '%a %b %d %H:%M:%S %z %Y'
-                    )
-                except (ValueError, TypeError):
-                    pass
-
-            if pub_date and pub_date < cutoff:
-                continue
-
-            # 构造摘要
-            summary_parts = []
-            if tweet.favorite_count:
-                summary_parts.append(f"❤️ {tweet.favorite_count}")
-            if tweet.retweet_count:
-                summary_parts.append(f"🔁 {tweet.retweet_count}")
-            summary_parts.append(tweet.text or '')
-            summary = ' | '.join(summary_parts)
-
-            # 媒体图片
-            image = ''
-            if hasattr(tweet, 'media') and tweet.media:
-                for m in tweet.media:
-                    if hasattr(m, 'media_url_https'):
-                        image = m.media_url_https
-                        break
-
-            items.append({
-                'title': title,
-                'link': link,
-                'summary': summary[:800],
-                'published': pub_date,
-                'image': image,
-                'source_name': source['name'],
-                'source_icon': source['icon'],
-                'source_color': source['color'],
-                'source_category': source['category'],
-            })
-
-        count = len(items)
+        count = len(filtered[:max_items])
         print(f"  ✅ {name}: 获取 {count} 条")
         if health_tracker:
             health_tracker.record_success(name, count)
-        return items
+        return filtered[:max_items]
 
-    except ImportError:
-        print(f"  ⏭️ {name}: twikit 未安装，请运行 pip install twikit")
-        return []
     except Exception as e:
         print(f"  ❌ {name}: {e}")
         if health_tracker:
@@ -891,18 +836,20 @@ def _fetch_twitter_feed(source, query, max_items, max_age_hours, health_tracker,
 
 
 def _fetch_xiaohongshu(source, query, max_items, max_age_hours, health_tracker, config):
-    """小红书：通过 xhs 库搜索/抓取笔记
+    """小红书：通过 xhs 库搜索/抓取笔记（需要 cookie）
+
+    ⚠️ 小红书无任何免登录公开 API，所有方式都需要浏览器 cookie。
+    没有配置 cookie 时会优雅跳过，不影响其他源。
 
     支持两种 URL 格式：
     - xhs://search/关键词     — 按关键词搜索笔记
     - xhs://user/user_id     — 抓取指定用户的笔记
 
-    需要在 config.json 中配置 xiaohongshu 块：
-    {
-        "xiaohongshu": {
-            "cookie": "从浏览器 DevTools 复制的 cookie 字符串"
-        }
-    }
+    配置方法：
+    1. 用 Chrome 打开 https://www.xiaohongshu.com 并登录
+    2. F12 → Application → Cookies → 全选复制 cookie 字符串
+    3. 粘贴到 config.json 的 xiaohongshu.cookie 字段
+    未配置时该源自动跳过。
     """
     name = source['name']
     xhs_config = (config or {}).get('xiaohongshu', {})
@@ -1140,10 +1087,10 @@ def fetch_feed(source, max_items=10, max_age_hours=48, health_tracker=None, conf
     if url.startswith('zhihu://'):
         return _fetch_zhihu_hot(source, max_items, max_age_hours, health_tracker)
 
-    # X/Twitter：通过 twikit 库
+    # X/Twitter：通过 Nitter RSS（免登录）
     if url.startswith('twitter://'):
-        query = url.replace('twitter://', '')
-        return _fetch_twitter_feed(source, query, max_items, max_age_hours, health_tracker, config)
+        screen_name = url.replace('twitter://', '')
+        return _fetch_twitter_feed(source, screen_name, max_items, max_age_hours, health_tracker, config)
 
     # 小红书：通过 xhs 库
     if url.startswith('xhs://'):
@@ -1407,7 +1354,7 @@ def generate_html(all_items, config, digest=None):
         </div>'''
 
         # 弹窗数据 — 包含卡片上没有的深度字段
-        modal_data.append({
+        modal_entry = {
             "title": item.get('title', ''),
             "summary": analysis.get('summary', item.get('title', '')[:100]),
             "background": analysis.get('background', ''),
@@ -1421,7 +1368,12 @@ def generate_html(all_items, config, digest=None):
             "pub_date": pub_str,
             "image": item.get('image', ''),
             "reading_minutes": reading_minutes,
-        })
+        }
+        # 因果分析数据（如有）
+        if analysis.get('causal_matches'):
+            modal_entry['causal_matches'] = analysis['causal_matches']
+            modal_entry['impact_summary'] = analysis.get('impact_summary', '')
+        modal_data.append(modal_entry)
 
     modal_json = json.dumps(modal_data, ensure_ascii=False)
 
@@ -1860,6 +1812,10 @@ def _default_analysis(title):
         'categories': ['其他'],
         'source_type': 'news',
         'reading_minutes': 1,
+        'causal_events': [],
+        'affected_assets': [],
+        'impact_direction': 'neutral',
+        'impact_confidence': 'low',
     }
 
 
@@ -1958,6 +1914,23 @@ def main():
             filtered_out = before_filter - len(all_items)
             if filtered_out > 0:
                 print(f"  🗑️ AI 相关性过滤移除 {filtered_out} 条非 AI 内容")
+
+            # ⑤b 因果分析知识库匹配
+            try:
+                causal_kb = CausalKB()
+                causal_matched = 0
+                for item in all_items:
+                    analysis = item.get('analysis', {})
+                    if analysis.get('causal_events'):
+                        matches = causal_kb.match_article(analysis)
+                        if matches:
+                            analysis['causal_matches'] = causal_kb.format_impact_json(matches)
+                            analysis['impact_summary'] = causal_kb.format_impact_summary(matches)
+                            causal_matched += 1
+                if causal_matched:
+                    print(f"  🔗 因果分析匹配 {causal_matched} 条文章")
+            except Exception as e:
+                print(f"  ⚠️ 因果分析知识库加载失败: {e}")
 
             # ⑥ 生成今日速览
             print("\n📝 生成今日速览...")

@@ -203,11 +203,20 @@
       {
         "name": "机器之心",
         "category": "media",
-        "url": "https://plink.anyfeeder.com/weixin/almosthuman2014",
+        "url": "https://www.jiqizhixin.com/rss",
         "icon": "🤖",
         "color": "#09B83E",
-        "description": "AI 领域头部中文媒体",
+        "description": "AI 领域头部中文媒体（官网 RSS）",
         "ai_only": true
+      },
+      {
+        "name": "AI前线",
+        "category": "media",
+        "url": "https://www.infoq.cn/feed",
+        "icon": "🚀",
+        "color": "#007BFF",
+        "description": "InfoQ AI 前线深度报道",
+        "ai_only": false
       },
       {
         "name": "量子位",
@@ -219,12 +228,12 @@
         "ai_only": true
       },
       {
-        "name": "新智元",
+        "name": "36氪 AI搜索",
         "category": "media",
-        "url": "https://plink.anyfeeder.com/weixin/AI_era",
-        "icon": "🧬",
-        "color": "#0984E3",
-        "description": "AI 行业动态",
+        "url": "https://rsshub.rssforever.com/36kr/search/articles/AI",
+        "icon": "🔎",
+        "color": "#0066FF",
+        "description": "36氪 AI 相关文章搜索",
         "ai_only": true
       },
       {
@@ -246,18 +255,9 @@
         "ai_only": false
       },
       {
-        "name": "X-AI热点",
-        "category": "community",
-        "url": "twitter://search/AI OR LLM OR GPT lang:en",
-        "icon": "🐦",
-        "color": "#1DA1F2",
-        "description": "X/Twitter AI 热门讨论",
-        "ai_only": true
-      },
-      {
         "name": "X-OpenAI",
         "category": "official",
-        "url": "twitter://user/OpenAI",
+        "url": "twitter://OpenAI",
         "icon": "🐦",
         "color": "#1DA1F2",
         "description": "OpenAI 官方推文",
@@ -266,11 +266,47 @@
       {
         "name": "X-AnthropicAI",
         "category": "official",
-        "url": "twitter://user/AnthropicAI",
+        "url": "twitter://AnthropicAI",
         "icon": "🐦",
         "color": "#1DA1F2",
         "description": "Anthropic 官方推文",
         "ai_only": true
+      },
+      {
+        "name": "X-GoogleDeepMind",
+        "category": "official",
+        "url": "twitter://GoogleDeepMind",
+        "icon": "🐦",
+        "color": "#1DA1F2",
+        "description": "Google DeepMind 官方推文",
+        "ai_only": true
+      },
+      {
+        "name": "X-Sam Altman",
+        "category": "community",
+        "url": "twitter://sama",
+        "icon": "🐦",
+        "color": "#1DA1F2",
+        "description": "Sam Altman 推文",
+        "ai_only": false
+      },
+      {
+        "name": "X-Yann LeCun",
+        "category": "community",
+        "url": "twitter://ylecun",
+        "icon": "🐦",
+        "color": "#1DA1F2",
+        "description": "Yann LeCun 推文",
+        "ai_only": false
+      },
+      {
+        "name": "X-Andrew Ng",
+        "category": "community",
+        "url": "twitter://AndrewYNg",
+        "icon": "🐦",
+        "color": "#1DA1F2",
+        "description": "Andrew Ng 推文",
+        "ai_only": false
       },
       {
         "name": "小红书AI",
@@ -293,9 +329,8 @@
     ]
   },
   "twitter": {
-    "cookies_file": "twitter_cookies.json",
-    "language": "en",
-    "_注释": "首次使用需运行 python3 twitter_login.py 登录生成 cookies"
+    "nitter_instances": ["https://nitter.net"],
+    "_注释": "通过 Nitter 公共镜像获取 Twitter RSS，无需登录。可添加备用实例。"
   },
   "xiaohongshu": {
     "cookie": "",
@@ -334,12 +369,16 @@
     "掘金 AI": 2,
     "机器之心": 4,
     "量子位": 3,
-    "新智元": 3,
+    "36氪 AI搜索": 2,
     "知乎热榜": 2,
     "知乎日报": 3,
-    "X-AI热点": 2,
     "X-OpenAI": 5,
     "X-AnthropicAI": 5,
+    "X-GoogleDeepMind": 5,
+    "X-Sam Altman": 3,
+    "X-Yann LeCun": 4,
+    "X-Andrew Ng": 4,
+    "AI前线": 3,
     "小红书AI": 1,
     "小红书ChatGPT": 1
   },

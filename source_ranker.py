@@ -58,12 +58,19 @@ DEFAULT_AUTHORITY = {
     "量子位": 3,
     "新智元": 3,
 
-    # X/Twitter
-    "X-AI热点": 2,
+    # X/Twitter (via Nitter RSS, 免登录)
     "X-OpenAI": 5,
     "X-AnthropicAI": 5,
+    "X-GoogleDeepMind": 5,
+    "X-Sam Altman": 3,
+    "X-Yann LeCun": 4,
+    "X-Andrew Ng": 4,
 
-    # 小红书
+    # 补充中文源
+    "AI前线": 3,
+    "36氪 AI搜索": 2,
+
+    # 小红书 (需 cookie)
     "小红书AI": 1,
     "小红书ChatGPT": 1,
 }
