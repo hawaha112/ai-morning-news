@@ -10,12 +10,13 @@ set -e
 PROJECT_DIR="$HOME/claude_workspace/pg4_FUTURE/ai-morning-news"
 LOG_FILE="$PROJECT_DIR/daily_run.log"
 
-# Telegram 推送配置（通过环境变量设置）
-# export TG_BOT_TOKEN=your_bot_token
-# export TG_CHAT_ID=your_chat_id
-TG_BOT_TOKEN="${TG_BOT_TOKEN:-}"
-TG_CHAT_ID="${TG_CHAT_ID:-}"
-BRIEFING_URL="https://hawaha112.github.io/ai-morning-briefing/"
+# 从外部 .env 文件加载敏感配置（TG_BOT_TOKEN, TG_CHAT_ID, BRIEFING_URL）
+ENV_FILE="$HOME/.config/ai-briefing/.env"
+if [ -f "$ENV_FILE" ]; then
+    source "$ENV_FILE"
+else
+    echo "⚠️  配置文件不存在: $ENV_FILE，Telegram 通知将被跳过" >&2
+fi
 
 # Telegram 发送函数
 send_tg() {
@@ -59,19 +60,19 @@ if [ $FETCH_STATUS -ne 0 ]; then
 fi
 echo "  ✅ 新闻抓取完成" >> "$LOG_FILE"
 
-# 统计文章数量
-ARTICLE_COUNT=$(python3 -c "
-import json, os
-try:
-    with open('$PROJECT_DIR/output/index.html', 'r') as f:
-        content = f.read()
-    count = content.count('class=\"card\"') or content.count('class=\"article')
-    if count == 0:
-        count = content.count('onclick')
-    print(count)
-except:
-    print('?')
-" 2>/dev/null || echo "?")
+# 从 stats.json 读取文章数量（由 fetch_news.py 生成）
+STATS_FILE="$PROJECT_DIR/output/stats.json"
+if [ -f "$STATS_FILE" ]; then
+    ARTICLE_COUNT=$(python3 -c "import json; print(json.load(open('$STATS_FILE'))['article_count'])" 2>/dev/null || echo "?")
+else
+    ARTICLE_COUNT="?"
+fi
+
+# 健康检查：文章数过低时告警
+if [ "$ARTICLE_COUNT" != "?" ] && [ "$ARTICLE_COUNT" -lt 3 ] 2>/dev/null; then
+    echo "  ⚠️ 文章数异常偏低: $ARTICLE_COUNT" >> "$LOG_FILE"
+    HEALTH_WARNING="⚠️ 文章数异常偏低（仅 ${ARTICLE_COUNT} 条），部分 RSS 源可能不可用"
+fi
 
 # 第三步：部署到 GitHub Pages
 DEPLOY_OK=false
@@ -113,6 +114,7 @@ if [ "$DEPLOY_OK" = true ]; then
 
 📰 今日共收录 ${ARTICLE_COUNT} 条 AI 资讯
 ${NO_LLM:+⚠️ Codex 代理未运行，本次跳过了 LLM 深度分析}
+${HEALTH_WARNING:+${HEALTH_WARNING}}
 
 👉 <a href=\"${BRIEFING_URL}\">点击阅读今日早报</a>"
     echo "  ✅ Telegram 推送成功" >> "$LOG_FILE"

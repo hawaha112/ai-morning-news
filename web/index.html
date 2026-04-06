@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 早报 · Morning Briefing</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg-dark: #0a0a0f;
+            --bg-card: #14142a;
+            --bg-card-hover: #1a1a3e;
+            --text-primary: #e8e8f0;
+            --text-secondary: #8888a8;
+            --purple: #8b5cf6;
+            --blue: #3b82f6;
+            --accent: #ec4899;
+            --green: #10b981;
+            --orange: #f59e0b;
+            --border: rgba(139, 92, 246, 0.15);
+        }
+        html, body {
+            height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+        header {
+            background: linear-gradient(135deg, rgba(139,92,246,0.06), rgba(59,130,246,0.04));
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 1.5rem;
+            position: sticky; top: 0; z-index: 100;
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+        }
+        .header-top { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 0.6rem; flex-wrap: wrap; }
+        .logo-section { display: flex; align-items: center; gap: 0.5rem; }
+        .title {
+            font-size: 1.5rem; font-weight: 800;
+            background: linear-gradient(135deg, var(--purple), var(--blue), var(--accent));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        .badge {
+            display: inline-flex; align-items: center; gap: 0.25rem;
+            background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.4);
+            padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.65rem; font-weight: 700; color: var(--green);
+        }
+        .pulse-dot { width: 5px; height: 5px; background: var(--green); border-radius: 50%; animation: pulse 2s ease-in-out infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        .date-time { font-size: 0.8rem; color: var(--text-secondary); }
+        .header-row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+        .search-container { flex: 1; max-width: 320px; position: relative; }
+        .search-box {
+            width: 100%; background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+            padding: 0.5rem 0.7rem 0.5rem 2rem; border-radius: 8px; color: var(--text-primary); font-size: 0.82rem;
+        }
+        .search-box:focus { outline: none; border-color: var(--purple); box-shadow: 0 0 10px rgba(139,92,246,0.12); }
+        .search-icon { position: absolute; left: 0.6rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 0.8rem; }
+        .filter-buttons { display: flex; gap: 0.35rem; overflow-x: auto; scrollbar-width: none; }
+        .filter-buttons::-webkit-scrollbar { display: none; }
+        .filter-btn {
+            padding: 0.35rem 0.7rem; border: 1px solid var(--border); background: transparent;
+            color: var(--text-secondary); border-radius: 14px; cursor: pointer; font-size: 0.75rem;
+            font-weight: 600; flex-shrink: 0; white-space: nowrap;
+        }
+        .filter-btn:hover { border-color: var(--purple); color: var(--purple); }
+        .filter-btn.active { background: linear-gradient(135deg, var(--purple), var(--blue)); border-color: transparent; color: white; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 1.2rem; }
+        .columns { column-count: 3; column-gap: 1rem; }
+        @media (max-width:1024px) { .columns { column-count: 2; } }
+        @media (max-width:640px) { .columns { column-count: 1; } .title { font-size: 1.2rem; } .search-container { max-width: 100%; flex-basis: 100%; } }
+
+        /* Cards */
+        .card {
+            background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px;
+            margin-bottom: 1rem; break-inside: avoid; overflow: hidden;
+            animation: fadeIn 0.5s ease-out forwards; opacity: 0; cursor: pointer;
+            transition: all 0.25s ease;
+        }
+        @keyframes fadeIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+        .card:hover { border-color: rgba(139,92,246,0.3); background: var(--bg-card-hover); transform: translateY(-2px); box-shadow: 0 6px 24px rgba(139,92,246,0.08); }
+        .card-image { width: 100%; height: 150px; object-fit: cover; display: block; }
+        .card-body { padding: 0.9rem 1rem; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; gap: 0.3rem; }
+        .source-badge {
+            display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.2rem 0.5rem;
+            border-radius: 4px; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; white-space: nowrap;
+            background: rgba(139,92,246,0.1); color: var(--purple); border: 1px solid rgba(139,92,246,0.25);
+        }
+        .source-badge.hacker-news{--c:#FF6600;background:rgba(255,102,0,0.1);color:var(--c);border-color:rgba(255,102,0,0.25)}
+        .source-badge.theverge{--c:#FA6400;background:rgba(250,100,0,0.1);color:var(--c);border-color:rgba(250,100,0,0.25)}
+        .source-badge.openai{--c:#10A37F;background:rgba(16,163,127,0.1);color:var(--c);border-color:rgba(16,163,127,0.25)}
+        .source-badge.anthropic{--c:#D4A574;background:rgba(212,165,116,0.1);color:var(--c);border-color:rgba(212,165,116,0.25)}
+        .source-badge.google-ai{--c:#4285F4;background:rgba(66,133,244,0.1);color:var(--c);border-color:rgba(66,133,244,0.25)}
+        .source-badge.huggingface{--c:#FFD21E;background:rgba(255,210,30,0.1);color:var(--c);border-color:rgba(255,210,30,0.25)}
+        .source-badge.mit{--c:#2ECC71;background:rgba(46,204,113,0.1);color:var(--c);border-color:rgba(46,204,113,0.25)}
+        .source-badge.arstechnica{--c:#E74C3C;background:rgba(231,76,60,0.1);color:var(--c);border-color:rgba(231,76,60,0.25)}
+        .source-badge.aiexplained{--c:#FF0000;background:rgba(255,0,0,0.1);color:var(--c);border-color:rgba(255,0,0,0.25)}
+        .source-badge.kr36{--c:#0066FF;background:rgba(0,102,255,0.1);color:var(--c);border-color:rgba(0,102,255,0.25)}
+        .source-badge.sspai{--c:#DA282A;background:rgba(218,40,42,0.1);color:var(--c);border-color:rgba(218,40,42,0.25)}
+        .card-time { font-size: 0.68rem; color: var(--text-secondary); white-space: nowrap; }
+        .card-title { font-size: 0.92rem; font-weight: 700; line-height: 1.45; color: var(--text-primary); margin-bottom: 0.4rem; }
+        .card-summary { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+        .card-keywords { display: flex; gap: 0.25rem; margin-top: 0.5rem; flex-wrap: wrap; }
+        .card-keyword {
+            font-size: 0.6rem; padding: 0.12rem 0.4rem; border-radius: 3px;
+            background: rgba(59,130,246,0.08); color: var(--blue); border: 1px solid rgba(59,130,246,0.15);
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.88); z-index: 1000; display: none;
+            align-items: flex-start; justify-content: center; padding: 2vh 1rem;
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); overflow-y: auto;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: #111128; border: 1px solid rgba(139,92,246,0.2); border-radius: 16px;
+            width: 100%; max-width: 720px; margin: auto; animation: modalIn 0.25s ease;
+        }
+        @keyframes modalIn { from{opacity:0;transform:scale(0.97)} to{opacity:1;transform:scale(1)} }
+        .modal-image { width: 100%; max-height: 300px; object-fit: cover; border-radius: 16px 16px 0 0; }
+        .modal-body { padding: 1.3rem 1.5rem; }
+        .modal-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.6rem; margin-bottom: 0.8rem; }
+        .modal-source-info { display: flex; align-items: center; gap: 0.5rem; }
+        .modal-close {
+            width: 30px; height: 30px; border: 1px solid var(--border); background: rgba(255,255,255,0.04);
+            color: var(--text-secondary); border-radius: 8px; cursor: pointer; font-size: 1rem;
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        .modal-close:hover { background: rgba(255,255,255,0.08); color: white; }
+        .modal-title { font-size: 1.2rem; font-weight: 800; line-height: 1.4; margin-bottom: 0.8rem; color: var(--text-primary); }
+        .modal-meta { font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 1rem; display: flex; gap: 0.8rem; flex-wrap: wrap; }
+
+        /* Key Points Section */
+        .key-points {
+            background: rgba(139,92,246,0.04); border: 1px solid rgba(139,92,246,0.12);
+            border-radius: 12px; padding: 1rem 1.2rem; margin-bottom: 1rem;
+        }
+        .key-points-header { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.7rem; }
+        .key-points-icon { font-size: 1rem; }
+        .key-points-label { font-size: 0.72rem; font-weight: 700; color: var(--purple); text-transform: uppercase; letter-spacing: 1px; }
+        .key-point {
+            display: flex; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem;
+            font-size: 0.85rem; line-height: 1.55; color: var(--text-primary);
+        }
+        .key-point:last-child { margin-bottom: 0; }
+        .key-point-bullet {
+            width: 6px; height: 6px; min-width: 6px; border-radius: 50%; margin-top: 0.45rem;
+            background: linear-gradient(135deg, var(--purple), var(--blue));
+        }
+
+        /* Keywords Cloud */
+        .keywords-cloud {
+            display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 1rem;
+        }
+        .keyword-tag {
+            font-size: 0.7rem; padding: 0.2rem 0.55rem; border-radius: 10px;
+            font-weight: 600; cursor: default;
+        }
+        .keyword-tag.tech { background: rgba(139,92,246,0.1); color: var(--purple); border: 1px solid rgba(139,92,246,0.2); }
+        .keyword-tag.company { background: rgba(59,130,246,0.1); color: var(--blue); border: 1px solid rgba(59,130,246,0.2); }
+        .keyword-tag.topic { background: rgba(236,72,153,0.1); color: var(--accent); border: 1px solid rgba(236,72,153,0.2); }
+        .keyword-tag.general { background: rgba(16,185,129,0.1); color: var(--green); border: 1px solid rgba(16,185,129,0.2); }
+
+        /* Mind Map Section */
+        .mind-map {
+            background: rgba(59,130,246,0.03); border: 1px solid rgba(59,130,246,0.1);
+            border-radius: 12px; padding: 1rem 1.2rem; margin-bottom: 1rem;
+        }
+        .mind-map-header { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.7rem; }
+        .mind-map-label { font-size: 0.72rem; font-weight: 700; color: var(--blue); text-transform: uppercase; letter-spacing: 1px; }
+        .mind-node {
+            padding: 0.4rem 0.7rem; border-radius: 8px; margin-bottom: 0.4rem;
+            font-size: 0.82rem; line-height: 1.4;
+        }
+        .mind-node.center {
+            background: linear-gradient(135deg, rgba(139,92,246,0.15), rgba(59,130,246,0.15));
+            border: 1px solid rgba(139,92,246,0.25); color: var(--text-primary); font-weight: 700;
+            text-align: center; margin-bottom: 0.6rem;
+        }
+        .mind-branch { margin-left: 1.2rem; border-left: 2px solid rgba(139,92,246,0.2); padding-left: 0.8rem; }
+        .mind-node.leaf {
+            background: rgba(255,255,255,0.03); color: var(--text-secondary);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .mind-node.leaf::before { content: '→ '; color: var(--purple); font-weight: 700; }
+
+        /* Full content area */
+        .modal-content-area { font-size: 0.85rem; line-height: 1.7; color: var(--text-secondary); margin-bottom: 1rem; }
+        .modal-content-area img { max-width: 100%; border-radius: 8px; margin: 0.6rem 0; }
+        .modal-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .modal-link {
+            display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.5rem 1rem;
+            background: linear-gradient(135deg, var(--purple), var(--blue)); color: white;
+            text-decoration: none; border-radius: 8px; font-size: 0.82rem; font-weight: 600;
+        }
+        .modal-link:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(139,92,246,0.25); }
+
+        /* Loading / Footer */
+        .loading { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; gap: 0.8rem; }
+        .spinner { width: 32px; height: 32px; border: 3px solid rgba(139,92,246,0.12); border-top: 3px solid var(--purple); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to{transform:rotate(360deg)} }
+        .loading-text { color: var(--text-secondary); font-size: 0.82rem; }
+        .trans-loading { color: var(--accent); font-size: 0.78rem; animation: blink 1s infinite; }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        .error { background: rgba(231,76,60,0.06); border: 1px solid rgba(231,76,60,0.15); color: #FF6B6B; padding: 0.8rem; border-radius: 8px; font-size: 0.82rem; }
+        footer { border-top: 1px solid var(--border); padding: 1.2rem; text-align: center; color: var(--text-secondary); font-size: 0.75rem; }
+        .footer-stats { display: flex; justify-content: center; gap: 1.5rem; margin-bottom: 0.6rem; }
+        .stat { display: flex; flex-direction: column; align-items: center; }
+        .stat-value { font-size: 1.2rem; font-weight: 700; color: var(--purple); }
+        .stat-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; }
+        .hidden { display: none !important; }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(139,92,246,0.25); border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-top">
+            <div class="logo-section">
+                <div class="title">📡 AI 早报</div>
+                <span class="badge"><span class="pulse-dot"></span> 实时</span>
+            </div>
+            <div class="date-time" id="dateTime"></div>
+        </div>
+        <div class="header-row">
+            <div class="search-container">
+                <span class="search-icon">🔍</span>
+                <input type="text" class="search-box" id="searchBox" placeholder="搜索新闻…">
+            </div>
+            <div class="filter-buttons" id="filterButtons">
+                <button class="filter-btn active" data-filter="all">全部</button>
+                <button class="filter-btn" data-filter="community">社区</button>
+                <button class="filter-btn" data-filter="media">媒体</button>
+                <button class="filter-btn" data-filter="official">官方</button>
+                <button class="filter-btn" data-filter="research">研究</button>
+                <button class="filter-btn" data-filter="video">视频</button>
+                <button class="filter-btn" data-filter="industry">产业</button>
+                <button class="filter-btn" data-filter="tech">技术</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="columns" id="newsContainer">
+            <div class="loading"><div class="spinner"></div><p class="loading-text">正在获取 AI 资讯…</p></div>
+        </div>
+    </div>
+
+    <footer>
+        <div class="footer-stats">
+            <div class="stat"><div class="stat-value" id="sourceCount">0</div><div class="stat-label">信息源</div></div>
+            <div class="stat"><div class="stat-value" id="articleCount">0</div><div class="stat-label">文章</div></div>
+            <div class="stat"><div class="stat-label">更新于</div><div class="stat-value" style="font-size:0.8rem;" id="lastUpdate">刚刚</div></div>
+        </div>
+        <p>每30分钟自动刷新 · <a href="#" style="color:var(--purple);" onclick="clearCacheAndReload();return false;">手动刷新</a></p>
+    </footer>
+
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal" id="modal">
+            <img class="modal-image hidden" id="modalImage" alt="">
+            <div class="modal-body">
+                <div class="modal-header">
+                    <div class="modal-source-info">
+                        <span class="source-badge" id="modalBadge"></span>
+                        <span class="card-time" id="modalTime"></span>
+                    </div>
+                    <button class="modal-close" id="modalClose">✕</button>
+                </div>
+                <div class="modal-title" id="modalTitle"></div>
+                <div class="modal-meta" id="modalMeta"></div>
+                <div id="modalKeyPoints"></div>
+                <div id="modalKeywords"></div>
+                <div id="modalMindMap"></div>
+                <div class="modal-content-area" id="modalContent"></div>
+                <div class="modal-actions">
+                    <a class="modal-link" id="modalLink" target="_blank" rel="noopener">🔗 阅读原文</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const RSS_SOURCES = [
+            { id:'hacker-news', name:'Hacker News', url:'https://news.ycombinator.com/rss', icon:'🔥', category:'community', lang:'en' },
+            { id:'theverge', name:'The Verge AI', url:'https://www.theverge.com/rss/ai-artificial-intelligence/index.xml', icon:'⚡', category:'media', lang:'en' },
+            { id:'openai', name:'OpenAI', url:'https://openai.com/blog/rss.xml', icon:'🤖', category:'official', lang:'en' },
+            { id:'anthropic', name:'Anthropic', url:'https://raw.githubusercontent.com/taobojlen/anthropic-rss-feed/main/anthropic_news_rss.xml', icon:'🧠', category:'official', lang:'en' },
+            { id:'google-ai', name:'Google AI', url:'https://blog.google/technology/ai/rss/', icon:'🔷', category:'official', lang:'en' },
+            { id:'huggingface', name:'Hugging Face', url:'https://huggingface.co/blog/feed.xml', icon:'🤗', category:'community', lang:'en' },
+            { id:'mit', name:'MIT Tech Review', url:'https://www.technologyreview.com/feed/', icon:'🎓', category:'research', lang:'en' },
+            { id:'arstechnica', name:'Ars Technica', url:'https://feeds.arstechnica.com/arstechnica/features', icon:'📰', category:'media', lang:'en' },
+            { id:'aiexplained', name:'AI Explained', url:'https://www.youtube.com/feeds/videos.xml?channel_id=UCNJ1Ymd5yFuUPtn21xtRbbw', icon:'🎬', category:'video', lang:'en' },
+            { id:'kr36', name:'36氪', url:'https://36kr.com/feed', icon:'💼', category:'industry', lang:'zh' },
+            { id:'sspai', name:'少数派', url:'https://sspai.com/feed', icon:'📱', category:'tech', lang:'zh' }
+        ];
+
+        const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
+        const CACHE_KEY = 'ai-briefing-v3';
+        const CACHE_TIME = 30 * 60 * 1000;
+
+        let allArticles = [];
+        let currentFilter = 'all';
+        let currentSearch = '';
+        let transCache = JSON.parse(localStorage.getItem('trans-cache') || '{}');
+
+        // ===== Google Translate =====
+        async function googleTranslate(text, from='en', to='zh-CN') {
+            if (!text || text.length < 2) return text;
+            const key = text.substring(0, 120);
+            if (transCache[key]) return transCache[key];
+            try {
+                const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${from}&tl=${to}&dt=t&q=${encodeURIComponent(text)}`;
+                const proxyUrl = CORS_PROXY + encodeURIComponent(url);
+                const resp = await fetch(proxyUrl);
+                const data = await resp.json();
+                let result = '';
+                if (Array.isArray(data) && Array.isArray(data[0])) {
+                    data[0].forEach(seg => { if (seg[0]) result += seg[0]; });
+                }
+                if (result) {
+                    transCache[key] = result;
+                    // Persist cache (keep it under 200 entries)
+                    const keys = Object.keys(transCache);
+                    if (keys.length > 200) { delete transCache[keys[0]]; }
+                    try { localStorage.setItem('trans-cache', JSON.stringify(transCache)); } catch(e) {}
+                    return result;
+                }
+            } catch (e) { console.error('Translation error:', e); }
+            return text;
+        }
+
+        // ===== Smart Summary =====
+        function smartTruncate(text, maxLen) {
+            if (!text || text.length <= maxLen) return text;
+            // Chinese sentence enders: 。！？；
+            // English: . ! ? ;
+            const endings = ['。', '！', '？', '；', '. ', '! ', '? '];
+            let bestCut = -1;
+            for (const end of endings) {
+                let pos = text.lastIndexOf(end, maxLen);
+                if (pos > maxLen * 0.4 && pos > bestCut) {
+                    bestCut = pos + end.length;
+                }
+            }
+            if (bestCut > 0) return text.substring(0, bestCut).trim();
+            // Fallback: cut at last space
+            const spacePos = text.lastIndexOf(' ', maxLen);
+            if (spacePos > maxLen * 0.5) return text.substring(0, spacePos).trim() + '…';
+            return text.substring(0, maxLen).trim() + '…';
+        }
+
+        function extractKeyPoints(text) {
+            if (!text || text.length < 50) return [];
+            // Split into sentences
+            const sentences = text.split(/(?<=[。！？\.\!\?])\s*/).filter(s => s.length > 10);
+            // Pick top 3-5 most informative sentences
+            const scored = sentences.map(s => ({
+                text: s.trim(),
+                score: s.length +
+                    (s.match(/AI|人工智能|模型|发布|推出|更新|研究|技术|数据|用户|开源|GPT|Claude|Gemini|LLM/gi) || []).length * 20
+            }));
+            scored.sort((a, b) => b.score - a.score);
+            return scored.slice(0, 4).map(s => smartTruncate(s.text, 120));
+        }
+
+        const AI_KEYWORDS = {
+            tech: ['GPT', 'Claude', 'Gemini', 'LLM', 'Transformer', 'RAG', 'Agent', 'API', 'SDK', 'Fine-tuning', 'RLHF', 'Token', 'Embedding', 'Diffusion', 'LoRA', 'BERT', 'Llama', 'Mistral', 'Qwen', 'DeepSeek'],
+            company: ['OpenAI', 'Anthropic', 'Google', 'Meta', 'Microsoft', 'Apple', 'NVIDIA', 'AMD', 'Hugging Face', 'Stability AI', 'Midjourney', 'xAI', '百度', '阿里', '字节', '腾讯', '华为'],
+            topic: ['开源', '安全', '对齐', '多模态', '推理', '训练', '部署', '芯片', '算力', '数据', '隐私', '版权', '监管', 'AGI', '自动驾驶', '机器人', '医疗', '教育']
+        };
+
+        function extractKeywords(text) {
+            if (!text) return [];
+            const found = [];
+            const lowerText = text.toLowerCase();
+            for (const [category, words] of Object.entries(AI_KEYWORDS)) {
+                for (const word of words) {
+                    if (lowerText.includes(word.toLowerCase())) {
+                        found.push({ word, category });
+                    }
+                }
+            }
+            return found.slice(0, 8);
+        }
+
+        function buildMindMap(title, keyPoints) {
+            if (keyPoints.length < 2) return '';
+            const centerText = smartTruncate(title, 40);
+            const branches = keyPoints.map(p => `<div class="mind-node leaf">${smartTruncate(p, 80)}</div>`).join('');
+            return `<div class="mind-map">
+                <div class="mind-map-header"><span>🧠</span><span class="mind-map-label">内容脉络</span></div>
+                <div class="mind-node center">${centerText}</div>
+                <div class="mind-branch">${branches}</div>
+            </div>`;
+        }
+
+        // ===== Utils =====
+        function updateDateTime() {
+            const n = new Date();
+            const d = ['日','一','二','三','四','五','六'];
+            document.getElementById('dateTime').textContent = `${n.getFullYear()}年${n.getMonth()+1}月${n.getDate()}日 周${d[n.getDay()]}`;
+        }
+
+        function getRelativeTime(dateStr) {
+            try {
+                const diff = Date.now() - new Date(dateStr).getTime();
+                const m = Math.floor(diff/60000), h = Math.floor(diff/3600000), d = Math.floor(diff/86400000);
+                if (m < 1) return '刚刚';
+                if (m < 60) return m+'分钟前';
+                if (h < 24) return h+'小时前';
+                if (d < 7) return d+'天前';
+                return new Date(dateStr).toLocaleDateString('zh-CN');
+            } catch(e) { return ''; }
+        }
+
+        function stripHtml(html) {
+            const t = document.createElement('div');
+            t.innerHTML = html;
+            return t.textContent || '';
+        }
+
+        function extractImages(html) {
+            const imgs = [], t = document.createElement('div');
+            t.innerHTML = html;
+            t.querySelectorAll('img').forEach(img => {
+                const src = img.getAttribute('src');
+                if (src && !src.includes('tracking') && !src.includes('pixel') && !src.includes('1x1') && !src.includes('spacer')) imgs.push(src);
+            });
+            return [...new Set(imgs)].slice(0, 5);
+        }
+
+        // ===== RSS Parsing =====
+        function parseRssFeed(xml, source) {
+            const articles = [];
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(xml, 'text/xml');
+            if (doc.getElementsByTagName('parsererror').length) return articles;
+            const isAtom = doc.documentElement.tagName === 'feed';
+            const items = isAtom ? doc.querySelectorAll('entry') : doc.querySelectorAll('item');
+
+            items.forEach(item => {
+                try {
+                    let title, link, description, contentHtml = '', pubDate, images = [];
+                    if (isAtom) {
+                        title = item.querySelector('title')?.textContent || '';
+                        link = item.querySelector('link[rel="alternate"]')?.getAttribute('href') || item.querySelector('link')?.getAttribute('href') || '';
+                        const content = item.querySelector('content')?.textContent || '';
+                        description = item.querySelector('summary')?.textContent || content;
+                        contentHtml = content || description;
+                        pubDate = item.querySelector('published')?.textContent || item.querySelector('updated')?.textContent || new Date().toISOString();
+                    } else {
+                        title = item.querySelector('title')?.textContent || '';
+                        link = item.querySelector('link')?.textContent || '';
+                        description = item.querySelector('description')?.textContent || '';
+                        const encoded = item.getElementsByTagNameNS('*','encoded')[0]?.textContent;
+                        contentHtml = encoded || description;
+                        pubDate = item.querySelector('pubDate')?.textContent || new Date().toISOString();
+                        const mc = item.getElementsByTagNameNS('*','content')[0];
+                        const mt = item.getElementsByTagNameNS('*','thumbnail')[0];
+                        if (mc?.getAttribute('url') && mc.getAttribute('medium')!=='document') images.push(mc.getAttribute('url'));
+                        if (mt?.getAttribute('url')) images.push(mt.getAttribute('url'));
+                        const enc = item.querySelector('enclosure[type^="image"]');
+                        if (enc?.getAttribute('url')) images.push(enc.getAttribute('url'));
+                    }
+                    if (contentHtml) images = images.concat(extractImages(contentHtml));
+                    if (title && link) {
+                        const fullText = stripHtml(contentHtml || description);
+                        const summary = smartTruncate(fullText, 400);
+                        articles.push({
+                            title: title.trim(), link: link.trim(), summary, fullText,
+                            contentHtml, images: [...new Set(images)].slice(0,5),
+                            pubDate: new Date(pubDate), source,
+                            titleCn: null, summaryCn: null, keyPointsCn: null
+                        });
+                    }
+                } catch(e) {}
+            });
+            return articles;
+        }
+
+        // ===== Fetch & Translate =====
+        async function fetchFeed(source) {
+            try {
+                const resp = await fetch(CORS_PROXY + encodeURIComponent(source.url));
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                return parseRssFeed(await resp.text(), source);
+            } catch(e) { console.error(`Failed: ${source.name}`, e); return []; }
+        }
+
+        async function translateArticle(article) {
+            if (article.source.lang === 'zh') {
+                article.titleCn = article.title;
+                article.summaryCn = article.summary;
+                return;
+            }
+            if (article.titleCn) return; // already done
+            try {
+                article.titleCn = await googleTranslate(article.title);
+                const textForSummary = article.fullText ? article.fullText.substring(0, 1500) : article.summary;
+                article.summaryCn = await googleTranslate(smartTruncate(textForSummary, 600));
+            } catch(e) {
+                article.titleCn = article.title;
+                article.summaryCn = article.summary;
+            }
+        }
+
+        async function loadAllFeeds() {
+            const container = document.getElementById('newsContainer');
+            container.innerHTML = '<div class="loading"><div class="spinner"></div><p class="loading-text">正在获取 AI 资讯…</p></div>';
+
+            const cached = sessionStorage.getItem(CACHE_KEY);
+            const cacheTime = sessionStorage.getItem(CACHE_KEY+'_time');
+            if (cached && cacheTime && (Date.now()-parseInt(cacheTime)) < CACHE_TIME) {
+                allArticles = JSON.parse(cached).map(a => ({...a, pubDate: new Date(a.pubDate)}));
+                renderArticles();
+                return;
+            }
+
+            const results = await Promise.allSettled(RSS_SOURCES.map(s => fetchFeed(s)));
+            allArticles = [];
+            let sc = 0;
+            results.forEach(r => { if (r.status==='fulfilled') { allArticles.push(...r.value); if (r.value.length) sc++; } });
+            allArticles.sort((a,b) => b.pubDate - a.pubDate);
+
+            // Translate all articles in parallel (batch of 3)
+            container.innerHTML = '<div class="loading"><div class="spinner"></div><p class="loading-text">正在翻译为中文…</p></div>';
+            for (let i = 0; i < allArticles.length; i += 3) {
+                const batch = allArticles.slice(i, i+3);
+                await Promise.allSettled(batch.map(a => translateArticle(a)));
+            }
+
+            sessionStorage.setItem(CACHE_KEY, JSON.stringify(allArticles.map(a => ({...a, pubDate: a.pubDate.toISOString()}))));
+            sessionStorage.setItem(CACHE_KEY+'_time', String(Date.now()));
+            renderArticles();
+            updateStats(sc);
+        }
+
+        function clearCacheAndReload() {
+            sessionStorage.removeItem(CACHE_KEY);
+            sessionStorage.removeItem(CACHE_KEY+'_time');
+            loadAllFeeds();
+        }
+
+        // ===== Render =====
+        function renderArticles() {
+            const container = document.getElementById('newsContainer');
+            let filtered = allArticles;
+            if (currentFilter !== 'all') filtered = filtered.filter(a => a.source.category === currentFilter);
+            if (currentSearch) {
+                const q = currentSearch.toLowerCase();
+                filtered = filtered.filter(a =>
+                    (a.titleCn||a.title).toLowerCase().includes(q) ||
+                    (a.summaryCn||a.summary).toLowerCase().includes(q)
+                );
+            }
+            if (!filtered.length) {
+                container.innerHTML = '<div class="error">暂无相关文章，试试其他筛选条件。</div>';
+                return;
+            }
+
+            container.innerHTML = filtered.map((a, i) => {
+                const time = getRelativeTime(a.pubDate.toISOString());
+                const title = a.titleCn || a.title;
+                const summary = a.summaryCn || a.summary;
+                const keywords = extractKeywords(a.title + ' ' + a.summary);
+                const kwHtml = keywords.slice(0,3).map(k => `<span class="card-keyword">${k.word}</span>`).join('');
+
+                return `<div class="card" style="animation-delay:${Math.min(i*35,700)}ms" onclick="openModal(${i})">
+                    ${a.images?.length ? `<img class="card-image" src="${a.images[0]}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
+                    <div class="card-body">
+                        <div class="card-header">
+                            <span class="source-badge ${a.source.id}">${a.source.icon} ${a.source.name}</span>
+                            <span class="card-time">${time}</span>
+                        </div>
+                        <div class="card-title">${title}</div>
+                        ${summary ? `<div class="card-summary">${smartTruncate(summary, 120)}</div>` : ''}
+                        ${kwHtml ? `<div class="card-keywords">${kwHtml}</div>` : ''}
+                    </div>
+                </div>`;
+            }).join('');
+            document.getElementById('articleCount').textContent = filtered.length;
+        }
+
+        function updateStats(sc) {
+            document.getElementById('sourceCount').textContent = sc;
+            document.getElementById('articleCount').textContent = allArticles.length;
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
+        }
+
+        // ===== Modal =====
+        function openModal(index) {
+            const a = allArticles[index];
+            if (!a) return;
+            const overlay = document.getElementById('modalOverlay');
+            const imgEl = document.getElementById('modalImage');
+
+            if (a.images?.length) { imgEl.src = a.images[0]; imgEl.classList.remove('hidden'); imgEl.onerror=()=>imgEl.classList.add('hidden'); }
+            else imgEl.classList.add('hidden');
+
+            const badge = document.getElementById('modalBadge');
+            badge.className = 'source-badge ' + a.source.id;
+            badge.innerHTML = `${a.source.icon} ${a.source.name}`;
+            document.getElementById('modalTime').textContent = getRelativeTime(a.pubDate.toISOString());
+
+            // Title - always Chinese
+            document.getElementById('modalTitle').textContent = a.titleCn || a.title;
+
+            // Meta
+            document.getElementById('modalMeta').innerHTML =
+                `<span>📅 ${a.pubDate.toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric'})}</span><span>📂 ${a.source.name}</span>`;
+
+            // Key Points
+            const summaryText = a.summaryCn || a.summaryCn || a.fullText || a.summary;
+            const keyPoints = extractKeyPoints(summaryText);
+            if (keyPoints.length >= 2) {
+                document.getElementById('modalKeyPoints').innerHTML = `<div class="key-points">
+                    <div class="key-points-header"><span class="key-points-icon">📌</span><span class="key-points-label">核心要点</span></div>
+                    ${keyPoints.map(p => `<div class="key-point"><div class="key-point-bullet"></div><div>${p}</div></div>`).join('')}
+                </div>`;
+            } else {
+                // Show as single summary block
+                document.getElementById('modalKeyPoints').innerHTML = summaryText ?
+                    `<div class="key-points">
+                        <div class="key-points-header"><span class="key-points-icon">📝</span><span class="key-points-label">内容摘要</span></div>
+                        <div style="font-size:0.85rem;line-height:1.6;color:var(--text-primary)">${summaryText}</div>
+                    </div>` : '';
+            }
+
+            // Keywords
+            const keywords = extractKeywords((a.titleCn||a.title) + ' ' + (a.summaryCn||a.summary) + ' ' + a.title + ' ' + a.summary);
+            if (keywords.length) {
+                document.getElementById('modalKeywords').innerHTML = `<div class="keywords-cloud">
+                    ${keywords.map(k => `<span class="keyword-tag ${k.category}">${k.word}</span>`).join('')}
+                </div>`;
+            } else {
+                document.getElementById('modalKeywords').innerHTML = '';
+            }
+
+            // Mind Map
+            if (keyPoints.length >= 3) {
+                document.getElementById('modalMindMap').innerHTML = buildMindMap(a.titleCn || a.title, keyPoints);
+            } else {
+                document.getElementById('modalMindMap').innerHTML = '';
+            }
+
+            // Additional images
+            const contentEl = document.getElementById('modalContent');
+            if (a.images && a.images.length > 1) {
+                contentEl.innerHTML = a.images.slice(1,4).map(src =>
+                    `<img src="${src}" style="max-width:100%;border-radius:8px;margin:0.3rem 0;" loading="lazy" onerror="this.style.display='none'">`
+                ).join('');
+            } else {
+                contentEl.innerHTML = '';
+            }
+
+            document.getElementById('modalLink').href = a.link;
+            overlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+            overlay.scrollTop = 0;
+        }
+
+        function closeModal() {
+            document.getElementById('modalOverlay').classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        // ===== Events =====
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentFilter = btn.dataset.filter;
+                renderArticles();
+            });
+        });
+
+        document.getElementById('searchBox').addEventListener('input', e => {
+            currentSearch = e.target.value;
+            renderArticles();
+        });
+
+        document.addEventListener('keydown', e => {
+            if (e.key === '/' && document.activeElement.tagName !== 'INPUT') { e.preventDefault(); document.getElementById('searchBox').focus(); }
+            if (e.key === 'Escape') {
+                if (document.getElementById('modalOverlay').classList.contains('active')) closeModal();
+                else { document.getElementById('searchBox').value = ''; currentSearch = ''; renderArticles(); }
+            }
+        });
+
+        document.getElementById('modalClose').addEventListener('click', closeModal);
+        document.getElementById('modalOverlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+
+        updateDateTime();
+        setInterval(updateDateTime, 60000);
+        loadAllFeeds();
+        setInterval(loadAllFeeds, CACHE_TIME);
+    </script>
+</body>
+</html>

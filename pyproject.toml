@@ -1,0 +1,8 @@
+[project]
+name = "ai-morning-briefing"
+version = "2.0.0"
+description = "Daily AI news aggregator with LLM-powered analysis"
+requires-python = ">=3.9"
+
+[project.scripts]
+ai-briefing = "fetch_news:main"
